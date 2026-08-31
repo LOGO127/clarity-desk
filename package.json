@@ -32,7 +32,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dist:win": "npm run build && electron-builder --win nsis portable",
+    "dist:win": "npm run build && electron-builder --win nsis portable --publish never",
     "lint": "npm run typecheck"
   },
   "dependencies": {
