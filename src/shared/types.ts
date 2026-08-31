@@ -55,16 +55,6 @@ export interface CreateSessionInput {
   hasSystemAudio: boolean
 }
 
-export interface SaveChunkInput {
-  sessionId: string
-  track: TrackKind
-  index: number
-  mimeType: string
-  startedAtMs: number
-  durationMs: number
-  data: ArrayBuffer
-}
-
 export interface AppendFragmentInput {
   sessionId: string
   track: TrackKind
@@ -116,7 +106,6 @@ export interface ClarityDeskApi {
   writeClipboardText(text: string): Promise<void>
   saveTextFile(defaultName: string, content: string): Promise<boolean>
   createSession(input: CreateSessionInput): Promise<SessionMetadata>
-  saveRecordingChunk(input: SaveChunkInput): Promise<RecordingChunk>
   appendRecordingFragment(input: AppendFragmentInput): Promise<void>
   finalizeRecordingChunk(input: FinalizeChunkInput): Promise<RecordingChunk>
   finalizeSession(sessionId: string, durationMs: number): Promise<SessionMetadata>

@@ -28,7 +28,6 @@ import type {
   LarkWriteInput,
   LarkWriteResult,
   RecordingChunk,
-  SaveChunkInput,
   SessionMetadata,
   SessionSummary,
   TranscriptDocument,
@@ -40,7 +39,6 @@ import { createSessionId, isValidSessionId } from './session-id'
 const execFileAsync = promisify(execFile)
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const isDevelopment = !app.isPackaged
-const MAX_IPC_AUDIO_BYTES = 50 * 1024 * 1024
 const MAX_TRANSCRIPTION_FILE_BYTES = 25 * 1024 * 1024
 const RECORDING_SEGMENT_DURATION_MS = 10 * 60 * 1000
 
@@ -464,37 +462,6 @@ function registerIpcHandlers(): void {
     await fs.mkdir(sessionDirectory(id), { recursive: true })
     await writeMetadata(metadata)
     return metadata
-  })
-
-  ipcMain.handle('session:save-chunk', async (_event, input: SaveChunkInput): Promise<RecordingChunk> => {
-    assertSessionId(input.sessionId)
-    if (!['microphone', 'system', 'mixed'].includes(input.track)) throw new Error('无效的音轨类型。')
-    if (!Number.isInteger(input.index) || input.index < 0 || input.index > 10_000) throw new Error('无效的切片编号。')
-    if (!(input.data instanceof ArrayBuffer) || input.data.byteLength === 0) throw new Error('录音切片为空。')
-    if (input.data.byteLength > MAX_IPC_AUDIO_BYTES) throw new Error('单个录音切片过大。')
-
-    return withSessionLock(input.sessionId, async () => {
-      const extension = mimeExtension(input.mimeType)
-      const fileName = `${input.track}-${input.index.toString().padStart(4, '0')}.${extension}`
-      const filePath = path.join(sessionDirectory(input.sessionId), fileName)
-      await fs.writeFile(filePath, new Uint8Array(input.data))
-      const chunk: RecordingChunk = {
-        track: input.track,
-        index: input.index,
-        fileName,
-        mimeType: input.mimeType,
-        size: input.data.byteLength,
-        startedAtMs: Math.max(0, Math.round(input.startedAtMs)),
-        durationMs: Math.max(0, Math.round(input.durationMs))
-      }
-      const metadata = await readMetadata(input.sessionId)
-      metadata.chunks = metadata.chunks.filter((entry) => !(entry.track === chunk.track && entry.index === chunk.index))
-      metadata.chunks.push(chunk)
-      metadata.chunks.sort((left, right) => left.startedAtMs - right.startedAtMs || left.track.localeCompare(right.track))
-      metadata.updatedAt = new Date().toISOString()
-      await writeMetadata(metadata)
-      return chunk
-    })
   })
 
   ipcMain.handle('session:append-fragment', async (_event, input: AppendFragmentInput): Promise<void> => {

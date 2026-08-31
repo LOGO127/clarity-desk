@@ -9,7 +9,6 @@ const api: ClarityDeskApi = {
   writeClipboardText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
   saveTextFile: (defaultName, content) => ipcRenderer.invoke('file:save-text', defaultName, content),
   createSession: (input) => ipcRenderer.invoke('session:create', input),
-  saveRecordingChunk: (input) => ipcRenderer.invoke('session:save-chunk', input),
   appendRecordingFragment: (input) => ipcRenderer.invoke('session:append-fragment', input),
   finalizeRecordingChunk: (input) => ipcRenderer.invoke('session:finalize-chunk', input),
   finalizeSession: (sessionId, durationMs) => ipcRenderer.invoke('session:finalize', sessionId, durationMs),
