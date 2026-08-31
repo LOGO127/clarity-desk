@@ -5,6 +5,22 @@
   "main": "./out/main/index.js",
   "author": "Clarity Desk contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LOGO127/clarity-desk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LOGO127/clarity-desk/issues"
+  },
+  "homepage": "https://github.com/LOGO127/clarity-desk#readme",
+  "keywords": [
+    "feishu",
+    "markdown",
+    "latex",
+    "interview",
+    "recorder",
+    "electron"
+  ],
   "engines": {
     "node": ">=22.12.0"
   },
