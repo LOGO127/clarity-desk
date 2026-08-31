@@ -1,0 +1,36 @@
+name: Feature request
+description: Propose an improvement that preserves the local-first, non-overlay design.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: Problem
+      description: What user problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Area
+      options:
+        - Formula formatting
+        - Interview recording
+        - Transcription
+        - Privacy and security
+        - Packaging and release
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    attributes:
+      label: Design constraints
+      options:
+        - label: This can work without an always-on-top overlay.
+          required: true
+        - label: This does not require automatic upload of recordings.
+          required: true

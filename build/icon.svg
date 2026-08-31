@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Clarity Desk">
+  <defs>
+    <linearGradient id="g" x1="72" y1="48" x2="438" y2="462" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#806FF4"/>
+      <stop offset="1" stop-color="#5140CF"/>
+    </linearGradient>
+    <filter id="s" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#3E329C" flood-opacity=".28"/>
+    </filter>
+  </defs>
+  <rect x="44" y="44" width="424" height="424" rx="132" fill="url(#g)" filter="url(#s)"/>
+  <path d="M304 153c-73-27-151 27-151 103s78 130 151 103" fill="none" stroke="#fff" stroke-width="52" stroke-linecap="round"/>
+  <circle cx="326" cy="256" r="35" fill="#C8F4DF"/>
+  <path d="M115 126l9 26 26 9-26 9-9 26-9-26-26-9 26-9 9-26Z" fill="#fff" opacity=".9"/>
+</svg>

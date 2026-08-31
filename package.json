@@ -1,0 +1,80 @@
+{
+  "name": "clarity-desk",
+  "version": "0.1.0",
+  "description": "A privacy-minded desktop toolkit for Feishu math formatting and interview recording.",
+  "main": "./out/main/index.js",
+  "author": "Clarity Desk contributors",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dist:win": "npm run build && electron-builder --win nsis portable",
+    "lint": "npm run typecheck"
+  },
+  "dependencies": {
+    "katex": "^0.16.22",
+    "lucide-react": "^1.37.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.3",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "44.1.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "3.1.0",
+    "rcedit": "4.0.1",
+    "typescript": "^7.0.2",
+    "vite": "6.4.3",
+    "vitest": "3.2.7"
+  },
+  "build": {
+    "appId": "io.github.claritydesk.app",
+    "productName": "Clarity Desk",
+    "asar": true,
+    "afterPack": "scripts/after-pack.cjs",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json",
+      "LICENSE"
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false,
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "artifactName": "Clarity-Desk-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "portable": {
+      "artifactName": "Clarity-Desk-Portable-${version}-${arch}.${ext}"
+    }
+  }
+}
