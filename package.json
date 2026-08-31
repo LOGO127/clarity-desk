@@ -49,17 +49,17 @@
     "zod": "^4.1.11"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@types/node": "^26.4.0",
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^6.1.1",
     "electron": "44.1.0",
     "electron-builder": "26.15.3",
-    "electron-vite": "3.1.0",
-    "rcedit": "4.0.1",
+    "electron-vite": "5.0.0",
+    "rcedit": "5.0.2",
     "typescript": "^7.0.2",
-    "vite": "6.4.3",
-    "vitest": "3.2.7"
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
   },
   "build": {
     "appId": "io.github.claritydesk.app",
