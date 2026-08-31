@@ -12,7 +12,7 @@ exports.default = async function afterPack(context) {
 
   const productName = context.packager.appInfo.productName
   const executable = path.join(context.appOutDir, `${productName}.exe`)
-  const icon = path.join(context.packager.projectDir, 'release', '.icon-ico', 'icon.ico')
+  const icon = path.join(context.packager.projectDir, 'build', 'icon.ico')
   const version = context.packager.appInfo.version
 
   await rcedit(executable, {
