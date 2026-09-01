@@ -36,7 +36,7 @@
     "lint": "npm run typecheck"
   },
   "dependencies": {
-    "katex": "^0.16.22",
+    "katex": "^0.18.4",
     "lucide-react": "^1.37.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
