@@ -28,6 +28,7 @@ const api: ClarityDeskApi = {
   deleteApiKey: () => ipcRenderer.invoke('settings:delete-api-key'),
   checkLarkCli: () => ipcRenderer.invoke('lark:check'),
   authenticateLark: () => ipcRenderer.invoke('lark:authenticate'),
+  centerLarkFormulas: (input) => ipcRenderer.invoke('lark:center-formulas', input),
   writeToLark: (input) => ipcRenderer.invoke('lark:write', input)
 }
 

@@ -39,7 +39,13 @@ The main process owns all privileged operations:
 
 The recording path does not depend on transcription. API failure cannot destroy the original audio.
 
-## Formula conversion
+## Existing-document formula centering
+
+The main process resolves an authorized docx/wiki URL to a document ID, lists its blocks, and classifies only standalone formula blocks. Native `Equation` blocks and text blocks whose meaningful elements are all equations are eligible; mixed text/equation paragraphs are excluded. Eligible blocks are updated in batches by changing only the alignment style, then listed again to verify the result.
+
+Document content is never sent to the renderer during this workflow. The renderer receives only aggregate counts and a success/error message.
+
+## Markdown formula conversion
 
 Markdown is parsed into an mdast tree with `remark-parse`, `remark-gfm`, and `remark-math`. Block `math` nodes are emitted as:
 
@@ -55,7 +61,8 @@ Inline `inlineMath` nodes stay in their containing paragraph. Text and attribute
 - No generic shell or filesystem IPC method.
 - Session identifiers and file names are validated before path construction.
 - API keys never cross back into the renderer after storage.
-- `lark-cli` arguments are allow-listed and document content is passed through a temporary file rather than the command line.
+- `lark-cli` arguments are constructed by operation-specific helpers; Markdown document content is passed through a temporary file rather than the command line.
+- Existing-document centering validates the document URL and resolved ID, limits each batch, updates only alignment fields, and verifies the changed blocks afterward.
 - Temporary flying-document files are removed after each operation.
 - No telemetry or auto-update service in the first release.
 

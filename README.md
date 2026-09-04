@@ -4,15 +4,15 @@
 
 <h1 align="center">Clarity Desk</h1>
 
-<p align="center"><strong>把 AI 文档排得更清楚，把每场面试复盘得更明白。</strong></p>
+<p align="center"><strong>一键居中飞书文档公式，完整记录每场在线面试。</strong></p>
 
 <p align="center">
-  自动识别 Markdown 公式并按飞书规则排版；同时录下麦克风、面试官系统声和混合音轨，<br>
+  复制已有飞书文档链接，一次居中全部独立公式；同时录下麦克风、面试官系统声和混合音轨，<br>
   在你主动发起后生成带说话人时间轴的面试文字稿。
 </p>
 
 <p align="center">
-  <a href="https://github.com/LOGO127/clarity-desk/releases/tag/v0.1.0"><img alt="Release" src="https://img.shields.io/badge/release-v0.1.0-6757e5?style=flat-square"></a>
+  <a href="https://github.com/LOGO127/clarity-desk/releases/tag/v0.2.0"><img alt="Release" src="https://img.shields.io/badge/release-v0.2.0-6757e5?style=flat-square"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-2563eb?style=flat-square">
   <a href="https://github.com/LOGO127/clarity-desk/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/LOGO127/clarity-desk/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-17211c?style=flat-square"></a>
@@ -35,7 +35,7 @@
 <p align="center"><sub>两个高频场景，一个安静的工作台。窗口永不置顶，开始录音后自动最小化。</sub></p>
 
 > [!IMPORTANT]
-> 当前为 `v0.1.0` 首个开源版本，主要面向 Windows 10/11 x64。录音前请明确告知面试官用途、保存方式并取得同意。首个版本尚未代码签名，Windows SmartScreen 可能显示“未知发布者”。
+> 当前为 `v0.2.0` 公开测试版，主要面向 Windows 10/11 x64。公式居中需要用户本人完成飞书授权并拥有目标文档的编辑权限。录音前请明确告知面试官用途、保存方式并取得同意。当前版本尚未代码签名，Windows SmartScreen 可能显示“未知发布者”。
 
 ## 为什么做这个项目
 
@@ -45,7 +45,8 @@
 
 Clarity Desk 把这两个具体问题放进同一个本地优先桌面工具：
 
-- **写文档时**，粘贴 Markdown，立即看到公式识别数量和飞书排版预览；
+- **整理已有文档时**，复制飞书链接，在 Clarity Desk 中一键居中全部独立公式；
+- **导入新文档时**，也可以把 Markdown 转成保留公式结构的飞书 XML；
 - **做面试时**，分别保存自己的声音、面试官系统声和可转写混合音轨；
 - **需要复盘时**，由你决定是否把混合音轨发送到 OpenAI 做说话人分离转写。
 
@@ -53,8 +54,10 @@ Clarity Desk 把这两个具体问题放进同一个本地优先桌面工具：
 
 | 能力 | 当前实现 |
 | --- | --- |
-| 公式识别 | 支持 `$...$`、`\(...\)`、`$$...$$` 与 `\[...\]` |
-| 飞书排版 | 独占一段的公式居中；正文行内公式保持原位 |
+| 已有文档公式居中 | 读取 docx/wiki 文档中的公式块，一次修改全部独立公式的对齐样式 |
+| 防误伤 | 含正文的行内公式保持原位；不覆盖、不追加、不重建文档正文 |
+| 结果校验 | 修改后重新读取公式块，显示检测、更新、已居中和回读确认数量 |
+| Markdown 公式识别 | 可选导入模式支持 `$...$`、`\(...\)`、`$$...$$` 与 `\[...\]` |
 | 文档结构 | 保留标题、列表、引用、代码块、链接、图片与 GFM 表格 |
 | 飞书写入 | 预览、复制/导出 XML；通过 `lark-cli` 新建、追加或覆盖文档 |
 | 面试录音 | 麦克风、系统声音、混合音轨三路独立 Opus/WebM |
@@ -64,7 +67,44 @@ Clarity Desk 把这两个具体问题放进同一个本地优先桌面工具：
 | 密钥保护 | OpenAI API Key 使用 Electron `safeStorage` / Windows DPAPI 加密 |
 | 数据边界 | 无遥测、无自动上传；只有用户主动转写或写入飞书时联网 |
 
-## 公式排版
+## 飞书文档公式一键居中
+
+这不是“重新导入一份排好版的文档”。Clarity Desk 会读取你已经在编辑的飞书 docx/wiki 文档，找到其中独占一段的公式块，只把对齐方式更新为居中，随后回读确认结果。
+
+### 使用方法
+
+1. 在飞书中打开目标文档，复制浏览器地址栏中的 docx 或 wiki 链接；
+2. 打开 Clarity Desk 的“公式居中”；
+3. 直接点击“从剪贴板一键居中”，或先把链接粘贴到输入框；
+4. 等待“处理完成”，核对检测、更新与回读确认数量。
+
+```text
+飞书文档链接
+    │
+    ├─> 读取全部文档块
+    ├─> 筛选独占一段的 Equation / 公式文本块
+    ├─> 仅更新 align = center
+    └─> 再次读取并校验结果
+```
+
+程序不会处理“这段正文中包含 $x$”一类行内公式段落，也不会用生成内容覆盖原文。当前的一键操作位于 Clarity Desk 中，不会修改飞书客户端的原生工具栏。
+
+<p align="center">
+  <img src="docs/images/formula-center.png" width="960" alt="Clarity Desk 飞书文档公式一键居中：粘贴文档链接，只修改独立公式对齐样式并回读校验">
+</p>
+
+### 首次连接飞书
+
+公式居中和直接写入文档需要安装飞书命令行工具，并使用你自己的飞书身份授权：
+
+```powershell
+npm install -g @larksuite/cli
+lark-cli auth login --domain docs
+```
+
+随后在“设置 → 飞书文档”中重新检测。应用不会保存飞书密码或访问令牌，文档请求由 `lark-cli` 以用户身份执行。
+
+### 可选：从 Markdown 导入
 
 把大模型输出复制到左侧，Clarity Desk 会解析 Markdown AST，而不是用简单的全局替换猜测公式位置。
 
@@ -82,20 +122,9 @@ $$
 - 独立公式输出为 `<p align="center"><latex>...</latex></p>`；
 - 原始 HTML 会转义，链接协议会校验，避免把不可信内容直接注入 XML。
 
-<p align="center">
-  <img src="docs/images/formula-studio.png" width="960" alt="Clarity Desk 公式排版工作台：左侧 Markdown，右侧居中公式预览">
-</p>
+#### 写入飞书
 
-### 写入飞书
-
-预览、复制和 XML 导出不需要账号。直接新建、追加或覆盖飞书文档是可选能力，需要安装飞书命令行工具：
-
-```powershell
-npm install -g @larksuite/cli
-lark-cli auth login --domain docs
-```
-
-随后在“设置 → 飞书文档”中重新检测。Clarity Desk 使用版本化的 `docs v2` XML 工作流，授权由飞书处理，应用不会保存飞书密码或访问令牌。
+预览、复制和 XML 导出不需要账号。直接新建、追加或覆盖飞书文档会复用上面的飞书连接。Clarity Desk 使用版本化的 `docs v2` XML 工作流。
 
 ## 面试录音怎么工作
 
@@ -133,12 +162,12 @@ Windows 系统声音 ─────> system-0000.webm ─────┤
 
 ### Windows 软件包
 
-从 [v0.1.0 Release](https://github.com/LOGO127/clarity-desk/releases/tag/v0.1.0) 选择一种方式：
+从 [v0.2.0 Release](https://github.com/LOGO127/clarity-desk/releases/tag/v0.2.0) 选择一种方式：
 
 | 下载文件 | 使用方式 | 适合场景 |
 | --- | --- | --- |
-| `Clarity-Desk-Portable-0.1.0-x64.exe` | 下载后双击运行，无需安装 | 首次体验，推荐 |
-| `Clarity-Desk-Setup-0.1.0-x64.exe` | 图形化安装，可选择目录并创建快捷方式 | 长期使用 |
+| `Clarity-Desk-Portable-0.2.0-x64.exe` | 下载后双击运行，无需安装 | 首次体验，推荐 |
+| `Clarity-Desk-Setup-0.2.0-x64.exe` | 图形化安装，可选择目录并创建快捷方式 | 长期使用 |
 | `SHA256SUMS.txt` | 核对下载文件完整性 | SmartScreen 提示时检查来源 |
 
 便携版首次启动会把 Electron 运行库释放到 Windows 临时目录，等待数秒属于正常现象。
@@ -191,12 +220,12 @@ Clarity Desk 是本地优先软件，但不是“永不联网”软件。联网�
 | 项目 | 当前状态 |
 | --- | --- |
 | 操作系统 | Windows 10/11 x64 |
-| 发布状态 | `v0.1.0`，适合个人试用和受控测试 |
+| 发布状态 | `v0.2.0`，适合个人试用和受控测试 |
 | Windows 签名 | 暂无代码签名 |
 | 系统声范围 | 捕获默认输出设备的整路回环声音，不是单个会议进程 |
 | 面试官识别 | 转写服务返回通用说话人标签，尚未自动命名为“我/面试官” |
 | 离线转写 | 尚未实现；当前转写需要 OpenAI API Key 与网络 |
-| 飞书直写 | 依赖兼容的 `@larksuite/cli` 和用户授权 |
+| 飞书公式居中/直写 | 依赖兼容的 `@larksuite/cli`、用户授权及目标文档编辑权限 |
 | macOS | 尚未支持系统音频录制 |
 
 “应用能录音”不等于“任何声卡、蓝牙耳机和会议软件组合都完全一致”。正式面试前请务必做短录音测试。恢复出的 WebM 可能缺少干净的尾部索引，多数播放器能够读取，但仍应先试听确认完整性。
@@ -205,18 +234,19 @@ Clarity Desk 是本地优先软件，但不是“永不联网”软件。联网�
 
 当前版本不是以“没有报错”作为完成标准，而是完成了以下检查：
 
-| 检查 | `v0.1.0` 结果 |
+| 检查 | `v0.2.0` 结果 |
 | --- | --- |
-| 自动化测试 | 3 个测试文件、11 项测试通过 |
+| 自动化测试 | 3 个测试文件、16 项测试通过，覆盖独立公式识别、行内公式防误伤与 Windows 路径转义 |
 | TypeScript | 主进程、预加载与 React 渲染进程类型检查通过 |
 | 依赖审计 | `npm audit`：0 个已知漏洞 |
-| 飞书格式 | `docs +create` 与 `docs +update` v2 XML dry-run 通过 |
+| 飞书已有文档 | 批量样式更新命令 dry-run 通过；修改后回读校验已写入程序 |
+| 飞书 Markdown 导入 | `docs +create` 与 `docs +update` v2 XML dry-run 通过 |
 | 三路录音 | 麦克风、Windows 系统提示音、混合音轨实机写入通过 |
 | 非遮挡行为 | 普通窗口、永不置顶、开始录音后自动最小化实测通过 |
 | 异常恢复 | 录制中强制结束进程，重启后恢复三路 `.partial` 文件通过 |
 | Windows 发布包 | 安装版与便携版构建通过，便携版黑盒启动通过 |
 
-这些检查不能证明软件不存在任何 bug。硬件、会议软件、飞书 CLI 和外部转写服务仍可能带来环境差异；欢迎提交可复现 Issue。
+这些检查不能证明软件不存在任何 bug。目前没有使用你的真实飞书文档做端到端修改测试，以免误改内容；建议先在一份可丢弃的测试文档中验收。硬件、会议软件、飞书 CLI 和外部转写服务仍可能带来环境差异；欢迎提交可复现 Issue。
 
 ## 从源码运行
 
@@ -261,11 +291,11 @@ build/                    # 应用图标
 
 ## 路线图
 
-- `v0.2`：本地 `faster-whisper` 离线转写后端
-- `v0.3`：说话人重命名、参考音频与“我/面试官”自动映射
-- `v0.4`：会话搜索、标签、删除与保留策略
-- `v0.5`：单进程系统音频捕获，减少通知音与其他应用干扰
-- `v0.6`：macOS 系统音频与多语言界面
+- `v0.3`：本地 `faster-whisper` 离线转写后端
+- `v0.4`：说话人重命名、参考音频与“我/面试官”自动映射
+- `v0.5`：会话搜索、标签、删除与保留策略
+- `v0.6`：单进程系统音频捕获，减少通知音与其他应用干扰
+- `v0.7`：macOS 系统音频与多语言界面
 
 路线图表达方向，不代表交付承诺。当前实现以 [Releases](https://github.com/LOGO127/clarity-desk/releases) 与测试结果为准。
 

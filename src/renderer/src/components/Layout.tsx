@@ -13,7 +13,7 @@ import type { Page } from '../App'
 
 const navigation = [
   { id: 'home' as const, label: '概览', icon: LayoutDashboard },
-  { id: 'formula' as const, label: '公式排版', icon: Sigma },
+  { id: 'formula' as const, label: '公式居中', icon: Sigma },
   { id: 'interview' as const, label: '面试录音', icon: Mic2 },
   { id: 'sessions' as const, label: '复盘记录', icon: History },
   { id: 'settings' as const, label: '设置', icon: Settings2 }
@@ -21,7 +21,7 @@ const navigation = [
 
 const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   home: { title: '晚上好', subtitle: '把文档整理与面试复盘做得更清楚。' },
-  formula: { title: '公式排版', subtitle: '识别独立公式，写入飞书时自动居中。' },
+  formula: { title: '飞书文档公式一键居中', subtitle: '粘贴已有文档链接，一次居中全部独立公式。' },
   interview: { title: '面试录音', subtitle: '三音轨备份，窗口最小化后持续录制。' },
   sessions: { title: '复盘记录', subtitle: '录音、文字稿和导出文件都保存在本地。' },
   settings: { title: '设置', subtitle: '连接转写服务与飞书工具链。' }

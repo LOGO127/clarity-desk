@@ -9,10 +9,10 @@ export function HomePage({ onNavigate, recent }: { onNavigate: (page: Page) => v
         <div className="hero-copy">
           <div className="eyebrow"><Sparkles size={15} /> Clarity workflow</div>
           <h2>少一点重复整理，<br />多一点真正的复盘。</h2>
-          <p>把大模型生成的公式文档写入飞书，或完整记录下一场在线面试。两个工具，一个安静的工作台。</p>
+          <p>一键居中已有飞书文档里的独立公式，或完整记录下一场在线面试。两个工具，一个安静的工作台。</p>
           <div className="hero-actions">
             <button className="button primary" onClick={() => onNavigate('formula')}>
-              整理一篇文档 <ArrowRight size={17} />
+              居中文档公式 <ArrowRight size={17} />
             </button>
             <button className="button secondary" onClick={() => onNavigate('interview')}>
               准备面试录音
@@ -32,8 +32,8 @@ export function HomePage({ onNavigate, recent }: { onNavigate: (page: Page) => v
           <div className="feature-icon violet"><Sigma size={22} /></div>
           <div className="feature-copy">
             <span className="feature-kicker">DOCUMENT</span>
-            <h3>飞书公式排版</h3>
-            <p>自动区分行内与独立公式，保留标题、列表、表格和代码块。</p>
+            <h3>飞书公式一键居中</h3>
+            <p>粘贴已有文档链接，只修改独立公式的对齐样式，行内公式保持原位。</p>
           </div>
           <ArrowRight className="feature-arrow" size={20} />
         </button>

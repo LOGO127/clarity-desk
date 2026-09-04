@@ -91,6 +91,20 @@ export interface LarkWriteResult {
   raw?: unknown
 }
 
+export interface LarkCenterFormulasInput {
+  docUrl: string
+}
+
+export interface LarkCenterFormulasResult {
+  ok: boolean
+  message: string
+  totalFormulaCount: number
+  updatedFormulaCount: number
+  alreadyCenteredCount: number
+  verifiedCenteredCount: number
+  documentId?: string
+}
+
 export interface AppInfo {
   version: string
   platform: string
@@ -121,5 +135,6 @@ export interface ClarityDeskApi {
   deleteApiKey(): Promise<void>
   checkLarkCli(): Promise<{ available: boolean; version?: string; authenticated?: boolean }>
   authenticateLark(): Promise<{ ok: boolean; message: string }>
+  centerLarkFormulas(input: LarkCenterFormulasInput): Promise<LarkCenterFormulasResult>
   writeToLark(input: LarkWriteInput): Promise<LarkWriteResult>
 }

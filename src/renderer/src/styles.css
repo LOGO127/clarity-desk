@@ -166,6 +166,45 @@ button:disabled { cursor: not-allowed; opacity: 0.52; }
 .empty-compact { height: 94px; display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--text-faint); font-size: 11px; }
 
 /* Formula */
+.formula-workflow-tabs { width: fit-content; margin-bottom: 14px; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.formula-workflow-tabs button { min-height: 36px; padding: 0 14px; display: flex; align-items: center; gap: 7px; border: 0; border-radius: 9px; color: var(--text-soft); background: transparent; font-size: 10px; cursor: pointer; }
+.formula-workflow-tabs button.active { color: var(--primary); background: var(--primary-soft); font-weight: 700; }
+.center-workflow { max-width: 980px; display: flex; flex-direction: column; gap: 14px; }
+.center-hero { position: relative; min-height: 150px; padding: 27px 29px; display: flex; align-items: center; gap: 18px; background: linear-gradient(135deg, #fff 50%, #f6f3ff); }
+.center-hero-icon { width: 58px; height: 58px; flex: 0 0 58px; display: grid; place-items: center; border-radius: 17px; color: white; background: linear-gradient(145deg, #7765eb, #5946d3); box-shadow: 0 13px 28px rgba(90,70,211,.2); }
+.center-hero-copy { min-width: 0; }
+.center-hero-copy h2 { margin: 5px 0 8px; font-size: 20px; letter-spacing: -.4px; }
+.center-hero-copy p { max-width: 650px; margin: 0; color: var(--text-soft); font-size: 10px; line-height: 1.65; }
+.center-connection { margin-left: auto; padding: 7px 10px; display: flex; align-items: center; gap: 7px; border-radius: 999px; color: var(--text-soft); background: var(--surface); font-size: 9px; white-space: nowrap; box-shadow: 0 2px 9px rgba(40,37,70,.05); }
+.center-action { padding: 20px 22px; display: flex; align-items: flex-end; gap: 13px; }
+.document-link-input { height: 43px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border: 1px solid var(--border); border-radius: 10px; background: #fbfbfd; }
+.document-link-input:focus-within { border-color: #b9b0ef; box-shadow: 0 0 0 3px rgba(101,84,219,.08); }
+.document-link-input > svg { flex: 0 0 auto; color: var(--primary); }
+.document-link-input input { min-width: 0; height: 100%; flex: 1; padding: 0; border: 0; outline: 0; background: transparent; }
+.document-link-input .small-action { flex: 0 0 auto; }
+.center-button { min-width: 218px; height: 43px; }
+.center-result { overflow: hidden; }
+.center-result.success { border-color: #bfe6d5; }
+.center-result.failed { border-color: #f0c9ce; }
+.result-heading { min-height: 72px; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
+.result-heading > svg { color: var(--mint); }
+.center-result.failed .result-heading > svg { color: var(--danger); }
+.result-heading strong, .result-heading span { display: block; }
+.result-heading strong { margin-bottom: 4px; font-size: 12px; }
+.result-heading span { color: var(--text-soft); font-size: 9px; }
+.result-metrics { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--border); background: #fbfbfd; }
+.result-metrics > div { min-height: 67px; padding: 13px 17px; border-right: 1px solid var(--border); }
+.result-metrics > div:last-child { border-right: 0; }
+.result-metrics strong, .result-metrics span { display: block; }
+.result-metrics strong { margin-bottom: 5px; color: var(--primary); font-size: 18px; }
+.result-metrics span { color: var(--text-faint); font-size: 8px; }
+.center-safety-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.safety-card { min-height: 105px; padding: 18px; display: flex; align-items: flex-start; gap: 11px; }
+.safety-card > svg { flex: 0 0 auto; color: var(--primary); }
+.safety-card strong, .safety-card span { display: block; }
+.safety-card strong { margin: 2px 0 6px; font-size: 10px; }
+.safety-card span { color: var(--text-soft); font-size: 9px; line-height: 1.55; }
+.import-workflow { display: flex; flex-direction: column; }
 .formula-toolbar { min-height: 84px; padding: 14px 16px; display: flex; align-items: flex-end; gap: 12px; }
 .mode-field { width: 180px; flex: 0 0 180px; }
 .doc-url-field { min-width: 210px; flex: 1; }
@@ -315,6 +354,10 @@ button:disabled { cursor: not-allowed; opacity: 0.52; }
   .hero-card { grid-template-columns: 1.35fr .65fr; padding: 32px; }
   .interview-grid { grid-template-columns: 1fr 300px; }
   .formula-toolbar { flex-wrap: wrap; }
+  .center-hero { align-items: flex-start; }
+  .center-connection { position: absolute; right: 26px; }
+  .center-action { align-items: stretch; flex-direction: column; }
+  .center-button { width: 100%; }
   .doc-url-field { order: 4; flex-basis: 100%; }
   .editor-grid { height: calc(100vh - 344px); }
 }

@@ -25,6 +25,8 @@ import type {
   AppendFragmentInput,
   CreateSessionInput,
   FinalizeChunkInput,
+  LarkCenterFormulasInput,
+  LarkCenterFormulasResult,
   LarkWriteInput,
   LarkWriteResult,
   RecordingChunk,
@@ -33,7 +35,17 @@ import type {
   TranscriptDocument,
   TranscriptSegment
 } from '../shared/types'
-import { buildLarkWriteArgs, extractLarkAuthFlow, extractLarkDocumentUrl } from './lark-cli'
+import {
+  buildLarkCenterBatchArgs,
+  buildLarkListBlocksArgs,
+  buildLarkResolveDocumentArgs,
+  buildLarkWindowsCommand,
+  buildLarkWriteArgs,
+  extractLarkAuthFlow,
+  extractLarkDocumentId,
+  extractLarkDocumentUrl,
+  findStandaloneFormulaBlocks
+} from './lark-cli'
 import { createSessionId, isValidSessionId } from './session-id'
 
 const execFileAsync = promisify(execFile)
@@ -60,6 +72,10 @@ const larkWriteSchema = z.object({
   mode: z.enum(['create', 'append', 'overwrite']),
   docUrl: z.string().max(500).optional(),
   xml: z.string().min(1).max(5_000_000)
+})
+
+const larkCenterFormulasSchema = z.object({
+  docUrl: z.string().trim().min(1).max(1_000)
 })
 
 function recordingsDirectory(): string {
@@ -370,29 +386,59 @@ async function locateLarkCli(): Promise<string | null> {
   }
 }
 
-function quoteForCmd(argument: string): string {
-  if (/[\r\n&|<>^%!]/.test(argument)) throw new Error('命令参数包含不安全字符。')
-  return `"${argument.replaceAll('"', '""')}"`
-}
-
 async function runLarkCli(args: string[], cwd?: string, timeout = 120_000): Promise<{ stdout: string; stderr: string }> {
   const executable = await locateLarkCli()
   if (!executable) throw new Error('未检测到 lark-cli，请先安装后重试。')
   if (process.platform === 'win32' && executable.toLowerCase().endsWith('.cmd')) {
-    const command = [quoteForCmd(executable), ...args.map(quoteForCmd)].join(' ')
+    const command = buildLarkWindowsCommand(executable, args)
     return execFileAsync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', command], {
       cwd,
       timeout,
       windowsHide: true,
-      maxBuffer: 5 * 1024 * 1024
+      windowsVerbatimArguments: true,
+      maxBuffer: 20 * 1024 * 1024,
+      env: { ...process.env, NO_UPDATE_NOTIFIER: '1' }
     })
   }
   return execFileAsync(executable, args, {
     cwd,
     timeout,
     windowsHide: true,
-    maxBuffer: 5 * 1024 * 1024
+    maxBuffer: 20 * 1024 * 1024,
+    env: { ...process.env, NO_UPDATE_NOTIFIER: '1' }
   })
+}
+
+function parseLarkCliJson(stdout: string): unknown {
+  const parsed = JSON.parse(stdout) as unknown
+  if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+    const envelope = parsed as Record<string, unknown>
+    if (envelope.ok === false) {
+      throw new Error(typeof envelope.message === 'string' ? envelope.message : '飞书请求失败。')
+    }
+  }
+  return parsed
+}
+
+function assertLarkDocumentUrl(value: string): void {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error('请输入有效的飞书文档链接。')
+  }
+  if (url.protocol !== 'https:' || !/\/(docx|wiki)\/[^/]+/.test(url.pathname)) {
+    throw new Error('请输入以 https:// 开头的飞书 docx 或 wiki 文档链接。')
+  }
+}
+
+function documentIdFromDocxUrl(value: string): string | undefined {
+  const match = new URL(value).pathname.match(/\/docx\/([^/]+)/)
+  return match?.[1]
+}
+
+function assertSafeLarkDocumentId(value: string): void {
+  if (!/^[A-Za-z0-9_-]{5,200}$/.test(value)) throw new Error('飞书返回了无效的文档标识。')
 }
 
 async function checkLarkCli() {
@@ -643,6 +689,75 @@ function registerIpcHandlers(): void {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
   })
+  ipcMain.handle(
+    'lark:center-formulas',
+    async (_event, rawInput: unknown): Promise<LarkCenterFormulasResult> => {
+      const emptyResult = {
+        totalFormulaCount: 0,
+        updatedFormulaCount: 0,
+        alreadyCenteredCount: 0,
+        verifiedCenteredCount: 0
+      }
+
+      try {
+        const input = larkCenterFormulasSchema.parse(rawInput) as LarkCenterFormulasInput
+        assertLarkDocumentUrl(input.docUrl)
+
+        const resolved = parseLarkCliJson((await runLarkCli(buildLarkResolveDocumentArgs(input.docUrl))).stdout)
+        const documentId = extractLarkDocumentId(resolved) ?? documentIdFromDocxUrl(input.docUrl)
+        if (!documentId) throw new Error('无法从该链接解析飞书文档，请确认你对文档有访问权限。')
+        assertSafeLarkDocumentId(documentId)
+
+        const before = parseLarkCliJson((await runLarkCli(buildLarkListBlocksArgs(documentId))).stdout)
+        const formulas = findStandaloneFormulaBlocks(before)
+        const alreadyCentered = formulas.filter((formula) => formula.align === 2)
+        const pending = formulas.filter((formula) => formula.align !== 2)
+
+        if (formulas.length === 0) {
+          return {
+            ok: true,
+            message: '没有找到独占一段的公式；含正文的行内公式不会被移动。',
+            ...emptyResult,
+            documentId
+          }
+        }
+
+        for (let index = 0; index < pending.length; index += 50) {
+          const batch = pending.slice(index, index + 50)
+          parseLarkCliJson(
+            (await runLarkCli(buildLarkCenterBatchArgs(documentId, batch, randomUUID()))).stdout
+          )
+        }
+
+        const after = parseLarkCliJson((await runLarkCli(buildLarkListBlocksArgs(documentId))).stdout)
+        const verified = findStandaloneFormulaBlocks(after)
+        const verifiedById = new Map(verified.map((formula) => [formula.blockId, formula.align]))
+        const updatedFormulaCount = pending.filter((formula) => verifiedById.get(formula.blockId) === 2).length
+        const verifiedCenteredCount = formulas.filter((formula) => verifiedById.get(formula.blockId) === 2).length
+        const ok = updatedFormulaCount === pending.length
+
+        return {
+          ok,
+          message: ok
+            ? pending.length > 0
+              ? `已将 ${pending.length} 个独立公式居中，并完成回读校验。`
+              : '文档中的独立公式已经全部居中。'
+            : `已居中 ${updatedFormulaCount}/${pending.length} 个待处理公式，请重试或检查文档权限。`,
+          totalFormulaCount: formulas.length,
+          updatedFormulaCount,
+          alreadyCenteredCount: alreadyCentered.length,
+          verifiedCenteredCount,
+          documentId
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+          ...emptyResult
+        }
+      }
+    }
+  )
   ipcMain.handle('lark:write', async (_event, rawInput: unknown): Promise<LarkWriteResult> => {
     const input = larkWriteSchema.parse(rawInput) as LarkWriteInput
     if (input.mode !== 'create') {
