@@ -5,7 +5,7 @@ Clarity Desk is local-first software.
 ## Data stored locally
 
 - Microphone, system, and mixed audio tracks.
-- Session metadata and generated transcripts.
+- Session metadata, generated transcripts, and resumable transcription checkpoints.
 - An encrypted OpenAI API Key, if configured.
 
 Recordings are stored under `Documents/Clarity Desk/Sessions` unless a future version adds a user-selected location. Uninstalling the application does not silently delete recordings.
@@ -15,7 +15,9 @@ Recordings are stored under `Documents/Clarity Desk/Sessions` unless a future ve
 Clarity Desk has no telemetry. Network requests occur only when the user explicitly:
 
 1. starts a transcription, which uploads the selected session's mixed audio chunks to OpenAI; or
-2. uses `lark-cli` to authenticate or write a Feishu document.
+2. uses `lark-cli` to authenticate, read a document for centering, or update a Feishu document.
+
+Connection checks run when opening the formula tool or settings and can cause `lark-cli` to validate authentication state. They do not upload recordings.
 
 Review the applicable provider's privacy terms before enabling either integration.
 

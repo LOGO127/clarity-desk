@@ -1,16 +1,14 @@
-## What changed
+## 解决的问题
 
-Describe the user-facing change and why it is needed.
+说明用户可见的问题、变更范围，以及仍未支持的情况。
 
-## Verification
+## 验证
 
-- [ ] `npm test`
-- [ ] `npm run typecheck`
-- [ ] `npm run build`
-- [ ] Tested at 980 × 680 or smaller supported layout
-- [ ] No real recordings, transcripts, keys, tokens, or private links are included
-- [ ] No new always-on-top window or meeting overlay was introduced
+- [ ] `npm test` 和 `npm run typecheck` 通过。
+- [ ] 界面或录音流程变更已运行 `npm run test:desktop`，或说明未运行原因。
+- [ ] 界面变更检查了最小窗口 800 × 620，并附不含敏感数据的截图；不引入面试置顶提示或会议覆盖层。
+- [ ] 打包配置变更已运行 Windows 打包与 `node scripts/electron-smoke.cjs --packaged`，或说明限制。
+- [ ] 新增用户行为或限制已同步 README / CHANGELOG。
+- [ ] 未提交密钥、录音、转写、私有文档链接、浏览器配置或本地测试产物。
 
-## Screenshots
-
-Add synthetic-data screenshots for UI changes.
+飞书真实测试、付费转写和硬件测试必须单独列明；模拟测试不能标为线上验收。CI 不应调用用户飞书文档或付费服务。

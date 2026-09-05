@@ -6,7 +6,7 @@ Security fixes are provided for the latest released minor version.
 
 ## Reporting a vulnerability
 
-Please do not open a public issue containing an exploit, API key, Feishu token, private recording, or personal transcript. Use GitHub's private vulnerability reporting feature for the repository.
+Please do not open a public issue containing an exploit, API key, Feishu token, private recording, or personal transcript. Use the repository's [private vulnerability report](https://github.com/LOGO127/clarity-desk/security/advisories/new) (enabled on 2026-09-05).
 
 Include:
 

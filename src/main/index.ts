@@ -7,6 +7,7 @@ import {
   desktopCapturer,
   dialog,
   ipcMain,
+  type IpcMainInvokeEvent,
   nativeImage,
   safeStorage,
   session,
@@ -18,7 +19,7 @@ import type { Dirent } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { z } from 'zod'
 import type {
   AppInfo,
@@ -37,16 +38,27 @@ import type {
 } from '../shared/types'
 import {
   buildLarkCenterBatchArgs,
-  buildLarkListBlocksArgs,
+  buildLarkCenterProgressResult,
   buildLarkResolveDocumentArgs,
   buildLarkWindowsCommand,
   buildLarkWriteArgs,
   extractLarkAuthFlow,
   extractLarkDocumentId,
   extractLarkDocumentUrl,
-  findStandaloneFormulaBlocks
+  extractLarkCliErrorMessage,
+  findStandaloneFormulaBlocks,
+  readAllLarkDocumentBlocks
 } from './lark-cli'
 import { createSessionId, isValidSessionId } from './session-id'
+import { isSafeExternalUrl, isTrustedIpcContext, isTrustedRendererUrl } from './navigation-security'
+import { recoveredRecordingDisposition, recordingIntegrityError } from './recording-integrity'
+import { finalizeAudioChunkFile, recoverUnindexedRecordingChunks } from './recording-files'
+import {
+  labelChunkSpeakers,
+  parseTranscriptionSegments,
+  resumeTranscriptionChunks,
+  type TranscriptCheckpoint
+} from './transcript-checkpoint'
 
 const execFileAsync = promisify(execFile)
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
@@ -58,6 +70,7 @@ let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let recordingActive = false
 let isQuitting = false
+let trustedRendererUrl: string | null = null
 
 const sessionLocks = new Map<string, Promise<unknown>>()
 
@@ -79,6 +92,13 @@ const larkCenterFormulasSchema = z.object({
 })
 
 function recordingsDirectory(): string {
+  // Explicit test launches isolate recordings before startup recovery runs.
+  if (app.commandLine.hasSwitch('clarity-smoke-test')) {
+    return path.join(app.getPath('userData'), 'smoke-recordings')
+  }
+  if (isDevelopment && process.env.CLARITY_DESK_RECORDINGS_DIR) {
+    return path.resolve(process.env.CLARITY_DESK_RECORDINGS_DIR)
+  }
   return path.join(app.getPath('documents'), 'Clarity Desk', 'Sessions')
 }
 
@@ -106,9 +126,18 @@ async function readMetadata(sessionId: string): Promise<SessionMetadata> {
 }
 
 async function writeMetadata(metadata: SessionMetadata): Promise<void> {
-  const destination = metadataPath(metadata.id)
+  await writeJsonAtomic(metadataPath(metadata.id), metadata)
+}
+
+async function writeJsonAtomic(destination: string, value: unknown): Promise<void> {
   const temporary = `${destination}.tmp`
-  await fs.writeFile(temporary, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8')
+  await fs.writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+  await fs.rename(temporary, destination)
+}
+
+async function writeTextAtomic(destination: string, value: string): Promise<void> {
+  const temporary = `${destination}.tmp`
+  await fs.writeFile(temporary, value, 'utf8')
   await fs.rename(temporary, destination)
 }
 
@@ -124,44 +153,27 @@ async function recoverInterruptedSessions(): Promise<void> {
     if (!entry.isDirectory() || !entry.name.startsWith('session-')) continue
     try {
       const metadata = await readMetadata(entry.name)
-      if (metadata.status !== 'recording') continue
+      if (metadata.status !== 'recording' && metadata.status !== 'failed') continue
+      const previousStatus = metadata.status
+      const previousError = metadata.error
       const directory = sessionDirectory(entry.name)
-      const files = await fs.readdir(directory)
-      const partialFiles = files.filter((file) => /^(microphone|system|mixed)-\d{4}\.(webm|ogg|m4a)\.partial$/.test(file))
-      let recoveredDurationMs = 0
-      for (const partialName of partialFiles) {
-        const match = partialName.match(/^(microphone|system|mixed)-(\d{4})\.(webm|ogg|m4a)\.partial$/)
-        if (!match?.[1] || !match[2] || !match[3]) continue
-        const track = match[1] as RecordingChunk['track']
-        const index = Number(match[2])
-        const extension = match[3]
-        const finalName = partialName.replace(/\.partial$/, '')
-        const partialPath = path.join(directory, partialName)
-        const finalPath = path.join(directory, finalName)
-        const stat = await fs.stat(partialPath)
-        await fs.rename(partialPath, finalPath)
-        const startedAtMs = index * RECORDING_SEGMENT_DURATION_MS
-        const elapsedByMtime = Math.max(1_000, stat.mtimeMs - new Date(metadata.createdAt).getTime() - startedAtMs)
-        const durationMs = Math.min(RECORDING_SEGMENT_DURATION_MS, elapsedByMtime)
-        recoveredDurationMs = Math.max(recoveredDurationMs, startedAtMs + durationMs)
-        metadata.chunks.push({
-          track,
-          index,
-          fileName: finalName,
-          mimeType: extension === 'ogg' ? 'audio/ogg' : extension === 'm4a' ? 'audio/mp4' : 'audio/webm',
-          size: stat.size,
-          startedAtMs,
-          durationMs
-        })
+      const recovered = await recoverUnindexedRecordingChunks(directory, metadata, RECORDING_SEGMENT_DURATION_MS)
+      if (previousStatus === 'failed' && recovered.chunks.length === 0) continue
+      for (const chunk of recovered.chunks) {
+        metadata.chunks = metadata.chunks.filter((existing) => !(existing.track === chunk.track && existing.index === chunk.index))
+        metadata.chunks.push(chunk)
       }
       metadata.chunks = metadata.chunks
         .filter((chunk, index, chunks) => chunks.findIndex((other) => other.track === chunk.track && other.index === chunk.index) === index)
         .sort((left, right) => left.startedAtMs - right.startedAtMs || left.track.localeCompare(right.track))
-      metadata.durationMs = Math.max(metadata.durationMs, recoveredDurationMs)
-      metadata.status = metadata.chunks.length ? 'ready' : 'failed'
-      metadata.error = metadata.chunks.length
-        ? '上次录音异常中断，Clarity Desk 已恢复落盘的音频片段。请先试听确认完整性。'
-        : '上次录音异常中断，未找到可恢复的音频片段。'
+      metadata.durationMs = metadata.chunks.reduce(
+        (duration, chunk) => Math.max(duration, chunk.startedAtMs + chunk.durationMs), metadata.durationMs
+      )
+      const integrityError = recordingIntegrityError(metadata.chunks, metadata.hasSystemAudio)
+        ?? (recovered.errors.length > 0 ? `部分音频文件无法恢复：${recovered.errors.join('；')}` : null)
+      const disposition = recoveredRecordingDisposition(previousStatus, previousError, integrityError)
+      metadata.status = disposition.status
+      metadata.error = disposition.error
       metadata.updatedAt = new Date().toISOString()
       await writeMetadata(metadata)
     } catch (error) {
@@ -229,10 +241,10 @@ function updateTrayMenu(): void {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 1220,
-    height: 800,
-    minWidth: 980,
-    minHeight: 680,
+    width: 960,
+    height: 700,
+    minWidth: 800,
+    minHeight: 620,
     show: false,
     backgroundColor: '#f6f7fb',
     icon: createTrayImage(),
@@ -250,6 +262,15 @@ function createWindow(): void {
   })
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
+  mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
+    if (isTrustedRendererUrl(targetUrl, trustedRendererUrl)) return
+    event.preventDefault()
+    if (isSafeExternalUrl(targetUrl)) void shell.openExternal(targetUrl)
+  })
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternalUrl(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
   if (isDevelopment) {
     mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
       console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`)
@@ -266,9 +287,12 @@ function createWindow(): void {
   })
 
   if (isDevelopment && process.env.ELECTRON_RENDERER_URL) {
-    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+    trustedRendererUrl = process.env.ELECTRON_RENDERER_URL
+    void mainWindow.loadURL(trustedRendererUrl)
   } else {
-    void mainWindow.loadFile(path.join(currentDirectory, '../renderer/index.html'))
+    const rendererPath = path.join(currentDirectory, '../renderer/index.html')
+    trustedRendererUrl = pathToFileURL(rendererPath).toString()
+    void mainWindow.loadFile(rendererPath)
   }
 }
 
@@ -356,17 +380,7 @@ async function transcribeAudioFile(
     throw new Error(`转写服务返回 ${response.status}：${message.slice(0, 400)}`)
   }
 
-  const payload = (await response.json()) as {
-    segments?: Array<{ speaker?: string; text?: string; start?: number; end?: number }>
-  }
-  return (payload.segments ?? [])
-    .filter((segment) => typeof segment.text === 'string')
-    .map((segment) => ({
-      speaker: segment.speaker || '说话人',
-      text: segment.text?.trim() ?? '',
-      start: offsetSeconds + (segment.start ?? 0),
-      end: offsetSeconds + (segment.end ?? segment.start ?? 0)
-    }))
+  return parseTranscriptionSegments(await response.json(), offsetSeconds)
 }
 
 async function locateLarkCli(): Promise<string | null> {
@@ -414,10 +428,16 @@ function parseLarkCliJson(stdout: string): unknown {
   if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
     const envelope = parsed as Record<string, unknown>
     if (envelope.ok === false) {
-      throw new Error(typeof envelope.message === 'string' ? envelope.message : '飞书请求失败。')
+      throw new Error(extractLarkCliErrorMessage(envelope) ?? '飞书请求失败。')
     }
   }
   return parsed
+}
+
+async function readLarkDocumentBlocks(documentId: string): Promise<Record<string, unknown>[]> {
+  return readAllLarkDocumentBlocks(documentId, async (args) =>
+    parseLarkCliJson((await runLarkCli(args)).stdout)
+  )
 }
 
 function assertLarkDocumentUrl(value: string): void {
@@ -457,24 +477,47 @@ async function checkLarkCli() {
   }
 }
 
+function assertTrustedIpcSender(event: IpcMainInvokeEvent): void {
+  const senderUrl = event.senderFrame?.url || event.sender.getURL()
+  const isMainFrame = !event.senderFrame?.parent
+  if (!isTrustedIpcContext({
+    senderUrl,
+    trustedRendererUrl,
+    ownsWebContents: event.sender === mainWindow?.webContents,
+    isMainFrame
+  })) {
+    throw new Error('已拒绝非受信页面的应用权限请求。')
+  }
+}
+
+function handleTrusted<TArgs extends unknown[], TResult>(
+  channel: string,
+  listener: (event: IpcMainInvokeEvent, ...args: TArgs) => TResult | Promise<TResult>
+): void {
+  ipcMain.handle(channel, (event, ...args) => {
+    assertTrustedIpcSender(event)
+    return listener(event, ...(args as TArgs))
+  })
+}
+
 function registerIpcHandlers(): void {
-  ipcMain.handle('app:info', async (): Promise<AppInfo> => ({
+  handleTrusted('app:info', async (): Promise<AppInfo> => ({
     version: app.getVersion(),
     platform: process.platform,
     recordingsDirectory: recordingsDirectory(),
     secureStorageAvailable: safeStorage.isEncryptionAvailable()
   }))
-  ipcMain.handle('window:minimize', () => mainWindow?.minimize())
-  ipcMain.handle('window:show', () => {
+  handleTrusted('window:minimize', () => mainWindow?.minimize())
+  handleTrusted('window:show', () => {
     mainWindow?.show()
     mainWindow?.focus()
   })
-  ipcMain.handle('clipboard:read-text', () => clipboard.readText())
-  ipcMain.handle('clipboard:write-text', (_event, text: unknown) => {
+  handleTrusted('clipboard:read-text', () => clipboard.readText())
+  handleTrusted('clipboard:write-text', (_event, text: unknown) => {
     if (typeof text !== 'string' || text.length > 5_000_000) throw new Error('剪贴板内容无效。')
     clipboard.writeText(text)
   })
-  ipcMain.handle('file:save-text', async (_event, defaultName: unknown, content: unknown) => {
+  handleTrusted('file:save-text', async (_event, defaultName: unknown, content: unknown) => {
     if (typeof defaultName !== 'string' || typeof content !== 'string') throw new Error('文件参数无效。')
     const result = await dialog.showSaveDialog({
       defaultPath: defaultName.replace(/[\\/:*?"<>|]/g, '-'),
@@ -488,7 +531,7 @@ function registerIpcHandlers(): void {
     return true
   })
 
-  ipcMain.handle('session:create', async (_event, rawInput: unknown) => {
+  handleTrusted('session:create', async (_event, rawInput: unknown) => {
     const input = createSessionSchema.parse(rawInput) as CreateSessionInput
     const id = createSessionId(new Date(), randomUUID().slice(0, 8))
     const now = new Date().toISOString()
@@ -510,7 +553,7 @@ function registerIpcHandlers(): void {
     return metadata
   })
 
-  ipcMain.handle('session:append-fragment', async (_event, input: AppendFragmentInput): Promise<void> => {
+  handleTrusted('session:append-fragment', async (_event, input: AppendFragmentInput): Promise<void> => {
     assertSessionId(input.sessionId)
     if (!['microphone', 'system', 'mixed'].includes(input.track)) throw new Error('无效的音轨类型。')
     if (!Number.isInteger(input.index) || input.index < 0 || input.index > 10_000) throw new Error('无效的切片编号。')
@@ -526,27 +569,25 @@ function registerIpcHandlers(): void {
     })
   })
 
-  ipcMain.handle('session:finalize-chunk', async (_event, input: FinalizeChunkInput): Promise<RecordingChunk> => {
+  handleTrusted('session:finalize-chunk', async (_event, input: FinalizeChunkInput): Promise<RecordingChunk> => {
     assertSessionId(input.sessionId)
     if (!['microphone', 'system', 'mixed'].includes(input.track)) throw new Error('无效的音轨类型。')
     if (!Number.isInteger(input.index) || input.index < 0 || input.index > 10_000) throw new Error('无效的切片编号。')
     return withSessionLock(input.sessionId, async () => {
       const extension = mimeExtension(input.mimeType)
       const fileName = `${input.track}-${input.index.toString().padStart(4, '0')}.${extension}`
-      const partialPath = path.join(sessionDirectory(input.sessionId), `${fileName}.partial`)
-      const filePath = path.join(sessionDirectory(input.sessionId), fileName)
-      await fs.rename(partialPath, filePath)
-      const stat = await fs.stat(filePath)
+      const metadata = await readMetadata(input.sessionId)
+      const existing = metadata.chunks.find((entry) => entry.track === input.track && entry.index === input.index && entry.fileName === fileName)
+      const stat = await finalizeAudioChunkFile(sessionDirectory(input.sessionId), fileName)
       const chunk: RecordingChunk = {
         track: input.track,
         index: input.index,
         fileName,
         mimeType: input.mimeType,
         size: stat.size,
-        startedAtMs: Math.max(0, Math.round(input.startedAtMs)),
-        durationMs: Math.max(0, Math.round(input.durationMs))
+        startedAtMs: existing?.startedAtMs ?? Math.max(0, Math.round(input.startedAtMs)),
+        durationMs: existing?.durationMs ?? Math.max(0, Math.round(input.durationMs))
       }
-      const metadata = await readMetadata(input.sessionId)
       metadata.chunks = metadata.chunks.filter((entry) => !(entry.track === chunk.track && entry.index === chunk.index))
       metadata.chunks.push(chunk)
       metadata.chunks.sort((left, right) => left.startedAtMs - right.startedAtMs || left.track.localeCompare(right.track))
@@ -556,17 +597,20 @@ function registerIpcHandlers(): void {
     })
   })
 
-  ipcMain.handle('session:finalize', async (_event, sessionId: string, durationMs: number) =>
+  handleTrusted('session:finalize', async (_event, sessionId: string, durationMs: number) =>
     withSessionLock(sessionId, async () => {
       const metadata = await readMetadata(sessionId)
+      const integrityError = recordingIntegrityError(metadata.chunks, metadata.hasSystemAudio)
+      if (integrityError) throw new Error(`${integrityError} 已保留现有片段。`)
       metadata.durationMs = Math.max(0, Math.round(durationMs))
       metadata.status = 'ready'
+      delete metadata.error
       metadata.updatedAt = new Date().toISOString()
       await writeMetadata(metadata)
       return metadata
     })
   )
-  ipcMain.handle('session:fail', async (_event, sessionId: string, error: string) =>
+  handleTrusted('session:fail', async (_event, sessionId: string, error: string) =>
     withSessionLock(sessionId, async () => {
       const metadata = await readMetadata(sessionId)
       metadata.status = 'failed'
@@ -575,7 +619,7 @@ function registerIpcHandlers(): void {
       await writeMetadata(metadata)
     })
   )
-  ipcMain.handle('session:list', async (): Promise<SessionSummary[]> => {
+  handleTrusted('session:list', async (): Promise<SessionSummary[]> => {
     await fs.mkdir(recordingsDirectory(), { recursive: true })
     const entries = await fs.readdir(recordingsDirectory(), { withFileTypes: true })
     const summaries = await Promise.all(
@@ -600,7 +644,7 @@ function registerIpcHandlers(): void {
       .filter((entry): entry is SessionSummary => entry !== null)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   })
-  ipcMain.handle('session:read-transcript', async (_event, sessionId: string): Promise<TranscriptDocument | null> => {
+  handleTrusted('session:read-transcript', async (_event, sessionId: string): Promise<TranscriptDocument | null> => {
     assertSessionId(sessionId)
     try {
       return JSON.parse(await fs.readFile(path.join(sessionDirectory(sessionId), 'transcript.json'), 'utf8')) as TranscriptDocument
@@ -608,13 +652,17 @@ function registerIpcHandlers(): void {
       return null
     }
   })
-  ipcMain.handle('session:transcribe', async (_event, sessionId: string): Promise<TranscriptDocument> => {
+  handleTrusted('session:transcribe', async (_event, sessionId: string): Promise<TranscriptDocument> => {
     assertSessionId(sessionId)
     const apiKey = await readSecret('openaiApiKey')
     if (!apiKey) throw new Error('请先在设置中保存 OpenAI API Key。')
 
     return withSessionLock(sessionId, async () => {
       const metadata = await readMetadata(sessionId)
+      const statusBeforeTranscription = metadata.status
+      const checkpointPath = path.join(sessionDirectory(sessionId), 'transcript.partial.json')
+      let completedCount = 0
+      let totalCount = 0
       metadata.status = 'transcribing'
       metadata.updatedAt = new Date().toISOString()
       delete metadata.error
@@ -624,12 +672,36 @@ function registerIpcHandlers(): void {
           .filter((chunk) => chunk.track === 'mixed')
           .sort((left, right) => left.startedAtMs - right.startedAtMs)
         if (mixedChunks.length === 0) throw new Error('该会话没有可转写的混合音轨。')
+        totalCount = mixedChunks.length
 
-        const segments: TranscriptSegment[] = []
-        for (const chunk of mixedChunks) {
-          const filePath = path.join(sessionDirectory(sessionId), chunk.fileName)
-          segments.push(...(await transcribeAudioFile(filePath, apiKey, chunk.startedAtMs / 1000)))
+        let checkpoint: TranscriptCheckpoint | null = null
+        try {
+          checkpoint = JSON.parse(await fs.readFile(checkpointPath, 'utf8')) as TranscriptCheckpoint
+        } catch {
+          checkpoint = null
         }
+        const completedChunks = await resumeTranscriptionChunks(
+          sessionId,
+          mixedChunks,
+          checkpoint,
+          (chunk) => transcribeAudioFile(
+            path.join(sessionDirectory(sessionId), chunk.fileName),
+            apiKey,
+            chunk.startedAtMs / 1000
+          ),
+          async (completed) => {
+            completedCount = completed.length
+            await writeJsonAtomic(checkpointPath, {
+              schemaVersion: 1,
+              sessionId,
+              updatedAt: new Date().toISOString(),
+              chunks: completed
+            } satisfies TranscriptCheckpoint)
+          }
+        )
+        const segments = completedChunks.flatMap((entry, index) =>
+          labelChunkSpeakers(entry.segments, index, completedChunks.length)
+        )
         segments.sort((left, right) => left.start - right.start)
         const document: TranscriptDocument = {
           sessionId,
@@ -639,45 +711,50 @@ function registerIpcHandlers(): void {
           segments,
           text: segments.map((segment) => `${segment.speaker}: ${segment.text}`).join('\n')
         }
-        await fs.writeFile(
-          path.join(sessionDirectory(sessionId), 'transcript.json'),
-          `${JSON.stringify(document, null, 2)}\n`,
-          'utf8'
-        )
-        await fs.writeFile(path.join(sessionDirectory(sessionId), 'transcript.md'), transcriptToMarkdown(document), 'utf8')
+        await writeJsonAtomic(path.join(sessionDirectory(sessionId), 'transcript.json'), document)
+        await writeTextAtomic(path.join(sessionDirectory(sessionId), 'transcript.md'), transcriptToMarkdown(document))
         metadata.status = 'transcribed'
         metadata.updatedAt = new Date().toISOString()
+        delete metadata.error
         await writeMetadata(metadata)
+        await fs.rm(checkpointPath, { force: true })
         return document
       } catch (error) {
-        metadata.status = 'failed'
-        metadata.error = error instanceof Error ? error.message : String(error)
+        metadata.status = statusBeforeTranscription === 'transcribed'
+          ? 'transcribed'
+          : statusBeforeTranscription === 'failed'
+            ? 'failed'
+            : 'ready'
+        const detail = error instanceof Error ? error.message : String(error)
+        metadata.error = completedCount > 0
+          ? `转写未完成，已保留 ${completedCount}/${totalCount} 个音频切片的进度；重试将从断点继续。${detail}`
+          : `转写未完成：${detail}`
         metadata.updatedAt = new Date().toISOString()
         await writeMetadata(metadata)
         throw error
       }
     })
   })
-  ipcMain.handle('session:open-folder', async (_event, sessionId: string) => {
+  handleTrusted('session:open-folder', async (_event, sessionId: string) => {
     const result = await shell.openPath(sessionDirectory(sessionId))
     if (result) throw new Error(result)
   })
-  ipcMain.handle('recording:set-active', (_event, active: boolean) => {
+  handleTrusted('recording:set-active', (_event, active: boolean) => {
     recordingActive = Boolean(active)
     updateTrayMenu()
   })
 
-  ipcMain.handle('settings:has-api-key', async () => Boolean(await readSecret('openaiApiKey')))
-  ipcMain.handle('settings:save-api-key', async (_event, apiKey: unknown) => {
+  handleTrusted('settings:has-api-key', async () => Boolean(await readSecret('openaiApiKey')))
+  handleTrusted('settings:save-api-key', async (_event, apiKey: unknown) => {
     if (typeof apiKey !== 'string' || apiKey.trim().length < 20 || apiKey.length > 500) {
       throw new Error('API Key 格式无效。')
     }
     await saveSecret('openaiApiKey', apiKey.trim())
   })
-  ipcMain.handle('settings:delete-api-key', async () => deleteSecret('openaiApiKey'))
+  handleTrusted('settings:delete-api-key', async () => deleteSecret('openaiApiKey'))
 
-  ipcMain.handle('lark:check', checkLarkCli)
-  ipcMain.handle('lark:authenticate', async () => {
+  handleTrusted('lark:check', checkLarkCli)
+  handleTrusted('lark:authenticate', async () => {
     try {
       const initiated = await runLarkCli(['auth', 'login', '--domain', 'docs', '--no-wait', '--json'])
       const flow = extractLarkAuthFlow(JSON.parse(initiated.stdout) as unknown)
@@ -689,34 +766,39 @@ function registerIpcHandlers(): void {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
   })
-  ipcMain.handle(
+  handleTrusted(
     'lark:center-formulas',
     async (_event, rawInput: unknown): Promise<LarkCenterFormulasResult> => {
       const emptyResult = {
         totalFormulaCount: 0,
+        submittedFormulaCount: 0,
         updatedFormulaCount: 0,
         alreadyCenteredCount: 0,
-        verifiedCenteredCount: 0
+        verifiedCenteredCount: 0,
+        unsupportedFormulaCount: 0
       }
 
+      let documentId: string | undefined
+      let formulas: ReturnType<typeof findStandaloneFormulaBlocks> = []
+      const submittedBlockIds = new Set<string>()
       try {
         const input = larkCenterFormulasSchema.parse(rawInput) as LarkCenterFormulasInput
         assertLarkDocumentUrl(input.docUrl)
 
         const resolved = parseLarkCliJson((await runLarkCli(buildLarkResolveDocumentArgs(input.docUrl))).stdout)
-        const documentId = extractLarkDocumentId(resolved) ?? documentIdFromDocxUrl(input.docUrl)
+        documentId = extractLarkDocumentId(resolved) ?? documentIdFromDocxUrl(input.docUrl)
         if (!documentId) throw new Error('无法从该链接解析飞书文档，请确认你对文档有访问权限。')
         assertSafeLarkDocumentId(documentId)
 
-        const before = parseLarkCliJson((await runLarkCli(buildLarkListBlocksArgs(documentId))).stdout)
-        const formulas = findStandaloneFormulaBlocks(before)
-        const alreadyCentered = formulas.filter((formula) => formula.align === 2)
-        const pending = formulas.filter((formula) => formula.align !== 2)
+        const before = await readLarkDocumentBlocks(documentId)
+        formulas = findStandaloneFormulaBlocks(before)
+        const pending = formulas.filter((formula) => formula.kind === 'text' && formula.align !== 2)
 
         if (formulas.length === 0) {
           return {
-            ok: true,
-            message: '没有找到独占一段的公式；含正文的行内公式不会被移动。',
+            ok: false,
+            status: 'failed',
+            message: '没有找到可识别的独占公式，未执行修改；含正文的行内公式不会被移动。',
             ...emptyResult,
             documentId
           }
@@ -727,38 +809,32 @@ function registerIpcHandlers(): void {
           parseLarkCliJson(
             (await runLarkCli(buildLarkCenterBatchArgs(documentId, batch, randomUUID()))).stdout
           )
+          batch.forEach((formula) => submittedBlockIds.add(formula.blockId))
         }
 
-        const after = parseLarkCliJson((await runLarkCli(buildLarkListBlocksArgs(documentId))).stdout)
-        const verified = findStandaloneFormulaBlocks(after)
-        const verifiedById = new Map(verified.map((formula) => [formula.blockId, formula.align]))
-        const updatedFormulaCount = pending.filter((formula) => verifiedById.get(formula.blockId) === 2).length
-        const verifiedCenteredCount = formulas.filter((formula) => verifiedById.get(formula.blockId) === 2).length
-        const ok = updatedFormulaCount === pending.length
-
-        return {
-          ok,
-          message: ok
-            ? pending.length > 0
-              ? `已将 ${pending.length} 个独立公式居中，并完成回读校验。`
-              : '文档中的独立公式已经全部居中。'
-            : `已居中 ${updatedFormulaCount}/${pending.length} 个待处理公式，请重试或检查文档权限。`,
-          totalFormulaCount: formulas.length,
-          updatedFormulaCount,
-          alreadyCenteredCount: alreadyCentered.length,
-          verifiedCenteredCount,
-          documentId
-        }
+        const after = await readLarkDocumentBlocks(documentId)
+        return buildLarkCenterProgressResult(formulas, submittedBlockIds, after, undefined, documentId)
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (documentId && formulas.length > 0) {
+          let verifiedResponse: unknown
+          try {
+            verifiedResponse = await readLarkDocumentBlocks(documentId)
+          } catch {
+            // The submitted count remains useful when the verification read itself is unavailable.
+          }
+          return buildLarkCenterProgressResult(formulas, submittedBlockIds, verifiedResponse, message, documentId)
+        }
         return {
           ok: false,
-          message: error instanceof Error ? error.message : String(error),
+          status: 'failed',
+          message,
           ...emptyResult
         }
       }
     }
   )
-  ipcMain.handle('lark:write', async (_event, rawInput: unknown): Promise<LarkWriteResult> => {
+  handleTrusted('lark:write', async (_event, rawInput: unknown): Promise<LarkWriteResult> => {
     const input = larkWriteSchema.parse(rawInput) as LarkWriteInput
     if (input.mode !== 'create') {
       if (!input.docUrl || !/^https?:\/\/[A-Za-z0-9._~:/?#[\]@!$'()*+,;=%-]+$/.test(input.docUrl)) {
@@ -782,31 +858,43 @@ function registerIpcHandlers(): void {
   })
 }
 
-app.whenReady().then(async () => {
-  app.setAppUserModelId('io.github.claritydesk.app')
-  await fs.mkdir(recordingsDirectory(), { recursive: true })
-  await recoverInterruptedSessions()
-  registerIpcHandlers()
-
-  session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
-    const sources = await desktopCapturer.getSources({ types: ['screen'] })
-    const primary = sources[0]
-    if (!primary) {
-      callback({})
-      return
-    }
-    callback({ video: primary, audio: 'loopback' })
-  })
-
-  createWindow()
-  tray = new Tray(createTrayImage())
-  tray.setToolTip('Clarity Desk')
-  tray.on('double-click', () => {
+// Recovery must only run in the owning instance: another launch must never
+// publish or rename partial files belonging to a recording that is still live.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow?.isMinimized()) mainWindow.restore()
     mainWindow?.show()
     mainWindow?.focus()
   })
-  updateTrayMenu()
-})
+
+  app.whenReady().then(async () => {
+    app.setAppUserModelId('io.github.claritydesk.app')
+    await fs.mkdir(recordingsDirectory(), { recursive: true })
+    await recoverInterruptedSessions()
+    registerIpcHandlers()
+
+    session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+      const sources = await desktopCapturer.getSources({ types: ['screen'] })
+      const primary = sources[0]
+      if (!primary) {
+        callback({})
+        return
+      }
+      callback({ video: primary, audio: 'loopback' })
+    })
+
+    createWindow()
+    tray = new Tray(createTrayImage())
+    tray.setToolTip('Clarity Desk')
+    tray.on('double-click', () => {
+      mainWindow?.show()
+      mainWindow?.focus()
+    })
+    updateTrayMenu()
+  })
+}
 
 app.on('before-quit', () => {
   isQuitting = true
