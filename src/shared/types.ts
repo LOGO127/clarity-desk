@@ -97,11 +97,14 @@ export interface LarkCenterFormulasInput {
 
 export interface LarkCenterFormulasResult {
   ok: boolean
+  status: 'completed' | 'partial' | 'failed'
   message: string
   totalFormulaCount: number
+  submittedFormulaCount: number
   updatedFormulaCount: number
   alreadyCenteredCount: number
   verifiedCenteredCount: number
+  unsupportedFormulaCount: number
   documentId?: string
 }
 

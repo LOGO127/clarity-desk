@@ -12,7 +12,7 @@ body:
   - type: input
     attributes:
       label: Clarity Desk version
-      placeholder: 0.1.0
+      placeholder: 0.2.0 (or the development commit)
     validations:
       required: true
   - type: input
@@ -30,6 +30,7 @@ body:
   - type: textarea
     attributes:
       label: Reproduction steps
+      description: For formulas, describe how they were pasted and whether they share a paragraph with normal text. Use synthetic examples; do not include private document links.
       placeholder: |
         1. Open ...
         2. Click ...

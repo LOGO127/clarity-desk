@@ -17,3 +17,6 @@ transcripts/
 work/
 outputs/
 output/
+.aris/
+review-stage/
+MANIFEST.md

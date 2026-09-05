@@ -81,7 +81,7 @@ export function SettingsPage({ notify }: { notify: (message: string, tone?: Toas
 
       <section className="settings-section panel about-section">
         <div className="settings-heading"><div className="settings-icon"><ShieldCheck size={20} /></div><div><h2>存储与隐私</h2><p>Clarity Desk 不设置自动上传、遥测或后台分析。</p></div></div>
-        <dl className="about-list"><div><dt>录音目录</dt><dd>{appInfo?.recordingsDirectory || '正在读取…'}</dd></div><div><dt>安全存储</dt><dd>{appInfo?.secureStorageAvailable ? '可用' : '不可用（将拒绝保存密钥）'}</dd></div><div><dt>应用版本</dt><dd>v{appInfo?.version || '0.1.0'} · {appInfo?.platform || 'Windows'}</dd></div></dl>
+        <dl className="about-list"><div><dt>录音目录</dt><dd>{appInfo?.recordingsDirectory || '正在读取…'}</dd></div><div><dt>安全存储</dt><dd>{appInfo ? appInfo.secureStorageAvailable ? '可用' : '不可用（将拒绝保存密钥）' : '正在读取…'}</dd></div><div><dt>应用版本</dt><dd>{appInfo ? `v${appInfo.version} · ${appInfo.platform}` : '正在读取…'}</dd></div></dl>
       </section>
     </div>
   )

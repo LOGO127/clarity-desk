@@ -17,6 +17,7 @@ export default defineConfig({
     }
   },
   renderer: {
-    plugins: [react()]
+    plugins: [react()],
+    build: { minify: 'esbuild' }
   }
 })

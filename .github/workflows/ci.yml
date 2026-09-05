@@ -13,12 +13,23 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
-      - run: npm run build
+      - run: npm run test:desktop
+      - name: Upload synthetic desktop screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-smoke-screenshots
+          path: |
+            output/playwright/iteration-formula.png
+            output/playwright/iteration-interview.png
+            output/playwright/iteration-recording-health.png
+          if-no-files-found: warn
+          retention-days: 7

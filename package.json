@@ -1,6 +1,6 @@
 {
   "name": "clarity-desk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A privacy-minded desktop toolkit for Feishu math formatting and interview recording.",
   "main": "./out/main/index.js",
   "author": "Clarity Desk contributors",
@@ -32,20 +32,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:desktop": "npm run build && node scripts/electron-smoke.cjs",
     "dist:win": "npm run build && electron-builder --win nsis portable --publish never",
     "lint": "npm run typecheck"
   },
   "dependencies": {
-    "katex": "^0.16.22",
-    "lucide-react": "^1.37.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-markdown": "^10.1.0",
-    "rehype-katex": "^7.0.1",
-    "remark-gfm": "^4.0.1",
-    "remark-math": "^6.0.0",
-    "remark-parse": "^11.0.0",
-    "unified": "^11.0.5",
     "zod": "^4.1.11"
   },
   "devDependencies": {
@@ -56,8 +47,19 @@
     "electron": "44.1.0",
     "electron-builder": "26.15.3",
     "electron-vite": "3.1.0",
+    "katex": "^0.16.22",
+    "lucide-react": "^1.37.0",
+    "playwright": "1.55.1",
     "rcedit": "4.0.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
     "typescript": "^7.0.2",
+    "unified": "^11.0.5",
     "vite": "6.4.3",
     "vitest": "3.2.7"
   },
@@ -91,6 +93,10 @@
     },
     "portable": {
       "artifactName": "Clarity-Desk-Portable-${version}-${arch}.${ext}"
-    }
+    },
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ]
   }
 }
