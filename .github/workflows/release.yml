@@ -18,6 +18,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Verify release version
+        shell: pwsh
+        run: |
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_NAME -ne "v$packageVersion") {
+            throw "Release tag must match package.json version."
+          }
       - run: npm ci
       - run: npm test
       - run: npm run dist:win
@@ -40,4 +47,18 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem release\*.exe | ForEach-Object FullName) release\SHA256SUMS.txt --generate-notes --verify-tag
+        run: |
+          $releaseArgs = @('release', 'create', $env:GITHUB_REF_NAME)
+          $releaseArgs += @(Get-ChildItem release\*.exe | ForEach-Object FullName)
+          $releaseArgs += @('release\SHA256SUMS.txt', '--verify-tag')
+          $notesPath = "docs/releases/$env:GITHUB_REF_NAME.md"
+          if (Test-Path -LiteralPath $notesPath) {
+            $releaseArgs += @('--notes-file', $notesPath)
+          } else {
+            $releaseArgs += '--generate-notes'
+          }
+          if ($env:GITHUB_REF_NAME -eq 'v0.3.0') {
+            $releaseArgs += @('--prerelease', '--latest=false', '--title', 'v0.3.0 · 轻量化公开测试版')
+          }
+          & gh @releaseArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

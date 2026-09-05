@@ -7,7 +7,7 @@
 <p align="center"><strong>飞书公式一键居中，面试录音随手复盘。</strong></p>
 
 <p align="center">
-  <a href="https://github.com/LOGO127/clarity-desk/releases/latest"><img alt="Release" src="https://img.shields.io/badge/release-v0.2.0-6757e5?style=flat-square"></a>
+  <a href="https://github.com/LOGO127/clarity-desk/releases/tag/v0.3.0"><img alt="Release" src="https://img.shields.io/badge/preview-v0.3.0-6757e5?style=flat-square"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-2563eb?style=flat-square">
   <a href="https://github.com/LOGO127/clarity-desk/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/LOGO127/clarity-desk/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-17211c?style=flat-square"></a>
@@ -27,13 +27,13 @@
 
 ## 下载
 
-当前已发布版本为 [v0.2.0](https://github.com/LOGO127/clarity-desk/releases/tag/v0.2.0)，面向 Windows 10/11 x64。**本文展示的轻量界面与安全修正属于待验收的 v0.3.0 开发版本，尚未发布。v0.2.0 的公式兼容性问题见下文，不应当作“所有公式均可居中”的已验收版本。**
+当前轻量化公开测试版为 [v0.3.0](https://github.com/LOGO127/clarity-desk/releases/tag/v0.3.0)，面向 Windows 10/11 x64，包含本文展示的界面和安全修正。**该版本在 GitHub 标为 Pre-release：飞书合成文档的真实按钮、回读和导出 PDF 已验收，网页视觉与用户实际粘贴样例仍待验收，不承诺所有公式均可居中。** 请使用这里的 v0.3.0 直达链接；GitHub 的 Latest 链接可能仍指向旧版。
 
 | 文件 | 使用方式 |
 | --- | --- |
-| `Clarity-Desk-Portable-0.2.0-x64.exe` | 双击运行，无需安装 |
-| `Clarity-Desk-Setup-0.2.0-x64.exe` | 选择目录安装，创建桌面快捷方式 |
-| `SHA256SUMS.txt` | 核对同一 Release 中下载文件的 SHA-256 |
+| [安装版](https://github.com/LOGO127/clarity-desk/releases/download/v0.3.0/Clarity-Desk-Setup-0.3.0-x64.exe) | 选择目录安装，创建桌面快捷方式 |
+| [便携版](https://github.com/LOGO127/clarity-desk/releases/download/v0.3.0/Clarity-Desk-Portable-0.3.0-x64.exe) | 双击运行，无需安装 |
+| [SHA256SUMS.txt](https://github.com/LOGO127/clarity-desk/releases/download/v0.3.0/SHA256SUMS.txt) | 核对同一 Release 中下载文件的 SHA-256 |
 
 当前为公开测试版，尚未代码签名，SmartScreen 可能提示未知发布者。请从本仓库 Releases 下载。便携版首次启动会释放运行库，需要等待数秒。
 
@@ -107,7 +107,7 @@ lark-cli auth login --domain docs
 
 ## 轻量化
 
-正在开发的 `v0.3.0` 聚焦日常使用的负担：
+`v0.3.0` 公开测试版聚焦日常使用的负担：
 
 - 默认直接打开公式居中；紧凑导航，默认窗口从 1220 × 800 调整为 960 × 700。
 - Markdown 编辑器、KaTeX、录音、记录与设置按需加载；初始 JavaScript 约 **211 KB**，此前约 **1.56 MB**。
