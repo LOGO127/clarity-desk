@@ -2,9 +2,9 @@
 
 All notable changes to Clarity Desk will be documented here.
 
-## [Unreleased]
+## [0.3.0] - 2026-09-05 (Pre-release)
 
-Planned v0.3.0. Not released: real Feishu API/button and exported-PDF acceptance passed on a synthetic document; browser visuals and user-pasted examples remain pending.
+Public preview for Windows x64. Real Feishu API/button and exported-PDF acceptance passed on a synthetic document; browser visuals and user-pasted examples remain pending. The preview is not a claim of complete formula compatibility. Release assets are built and checked by the tagged Windows workflow.
 
 ### Changed
 

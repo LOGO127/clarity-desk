@@ -1,6 +1,6 @@
 # 架构
 
-本文描述当前 v0.3.0 开发代码，不代表该版本已经发布。Clarity Desk 是面向 Windows 的 Electron 桌面工具，核心流程为已有飞书文档的公式居中，以及本地录音与主动转写。
+本文描述 v0.3.0 公开测试版代码；发布状态与安装包见 [Release](https://github.com/LOGO127/clarity-desk/releases/tag/v0.3.0)。Clarity Desk 是面向 Windows 的 Electron 桌面工具，核心流程为已有飞书文档的公式居中，以及本地录音与主动转写。
 
 ## 进程与模块边界
 

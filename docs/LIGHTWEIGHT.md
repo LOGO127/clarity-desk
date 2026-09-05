@@ -1,6 +1,6 @@
 # 轻量化记录
 
-2026-09-05，v0.3.0 开发中，尚未发布。轻量化不替代公式功能的真实验收。
+2026-09-05，v0.3.0 公开测试版的本地构建测量。轻量化不替代公式功能的真实验收；GitHub 安装包由发布流水线单独构建，其确切大小与校验值以 [Release](https://github.com/LOGO127/clarity-desk/releases/tag/v0.3.0) 为准。
 
 ## 已实现
 
@@ -26,6 +26,6 @@
 
 后续代码修改会改变字节数，最终发布时应重新构建并记录实际值。Electron 自带 Chromium / Node，界面代码减小不意味着安装包或内存同比减小。
 
-本轮 `npm run dist:win` 和重建后的 `node scripts/electron-smoke.cjs --packaged` 已通过。这里只验证解压后应用的启动、页面、版本、按需加载、重复启动及外链隔离；没有自动执行 NSIS 安装/卸载，也没有发布这些本地产物。
+本轮 `npm run dist:win` 和重建后的 `node scripts/electron-smoke.cjs --packaged` 已通过。这里只验证解压后应用的启动、页面、版本、按需加载、重复启动及外链隔离；没有自动执行 NSIS 安装/卸载。这些本地测量产物不直接上传，发布流程重新构建和验证。
 
 验证命令：`npm run build`，统计 `out/renderer/assets/index-*.js`；最终运行 `npm run dist:win` 后统计 Release 中实际文件。桌面回归检查启动时尚未请求可选导入模块及 KaTeX 字体，但不会据此宣称所有机器的首屏更快。
