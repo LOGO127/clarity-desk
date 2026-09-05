@@ -2,8 +2,10 @@ const path = require('node:path')
 const fs = require('node:fs/promises')
 const assert = require('node:assert/strict')
 const { spawn } = require('node:child_process')
+const { pathToFileURL } = require('node:url')
 const { _electron: electron } = require('playwright')
 const packageMetadata = require('../package.json')
+const { waitForAppReady } = require('./electron-startup.cjs')
 
 function isolatedSmokePaths(runDirectory) {
   const profileDirectory = path.join(runDirectory, 'electron-profile')
@@ -85,6 +87,8 @@ async function main() {
     ? commonArgs
     : [...commonArgs, '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '.']
   const env = { ...process.env }
+  // Both modes must exercise the built renderer, not an inherited dev server.
+  delete env.ELECTRON_RENDERER_URL
   const application = await electron.launch({
     cwd: root,
     executablePath,
@@ -93,17 +97,17 @@ async function main() {
   })
 
   try {
+    const appPath = await application.evaluate(({ app }) => app.getAppPath())
+    const expectedUrl = pathToFileURL(path.join(appPath, 'out', 'renderer', 'index.html')).href
     const page = await application.firstWindow()
     page.on('console', (message) => {
       if (message.type() === 'error' || message.type() === 'warning') messages.push(`${message.type()}: ${message.text()}`)
     })
     page.on('pageerror', (error) => messages.push(`pageerror: ${error.message}`))
-    await page.waitForLoadState('domcontentloaded')
-    const appInfo = await page.evaluate(() => window.clarity.getAppInfo())
+    const appInfo = await waitForAppReady(page, expectedUrl)
     assert.equal(path.resolve(appInfo.recordingsDirectory).toLowerCase(), path.resolve(sessionRoot).toLowerCase(),
       'Smoke recordings must use the isolated profile before startup recovery runs')
 
-    await page.getByRole('heading', { name: '飞书文档里的公式，一键居中' }).waitFor()
     const initialResources = await page.evaluate(() => performance.getEntriesByType('resource').map((entry) => entry.name))
     assert.ok(!initialResources.some((name) => /FormulaImport|KaTeX/.test(name)), 'Optional formula renderer must not load at startup')
     await page.screenshot({ path: path.join(artifactRoot, `${prefix}-formula.png`), fullPage: true })

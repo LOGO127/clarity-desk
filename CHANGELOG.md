@@ -2,6 +2,13 @@
 
 All notable changes to Clarity Desk will be documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- Make source and packaged desktop smoke wait for the exact built renderer URL and its visible main heading before reading app information. Do not accept the initial blank page's load event as application readiness.
+- Test delayed navigation/heading ordering, strict file URL matching and timeout propagation with four dependency-free startup-helper tests. Keep recording isolation and all existing smoke assertions unchanged.
+
 ## [0.3.0] - 2026-09-05 (Pre-release)
 
 Public preview for Windows x64. Real Feishu API/button and exported-PDF acceptance passed on a synthetic document; browser visuals and user-pasted examples remain pending. The preview is not a claim of complete formula compatibility. Release assets are built and checked by the tagged Windows workflow.

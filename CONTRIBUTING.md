@@ -50,6 +50,8 @@ docs: clarify Feishu authentication
 
 Use synthetic audio and invented transcripts. Never upload a real interview recording to an issue or pull request.
 
+`npm test` includes four Node.js tests for smoke-startup sequencing, in addition to the application unit tests. Source and packaged smoke use the same small readiness helper: wait for the exact built renderer file URL, then the visible main heading, before invoking the application bridge. Do not replace this with a fixed delay or retry failed IPC calls.
+
 `scripts/electron-smoke.cjs` always supplies an isolated `--user-data-dir` and `--clarity-smoke-test`. The latter redirects recordings and startup recovery to that profile's `smoke-recordings` directory, including in packaged builds. Do not remove these isolation arguments when testing locally. Normal startup retains the user's existing Documents directory; packaged builds ignore the development-only `CLARITY_DESK_RECORDINGS_DIR` variable.
 
 The opt-in `scripts/feishu-live-acceptance.cjs` performs real writes only when both `CLARITY_ALLOW_TEST_DOCUMENT_WRITE=1` and `FEISHU_TEST_DOC_URL` are supplied. Use a disposable document with at least one uncentered formula and explicit permission. This script is not part of CI; do not configure repository secrets to run it automatically. Verify content preservation and Feishu visual rendering separately.
