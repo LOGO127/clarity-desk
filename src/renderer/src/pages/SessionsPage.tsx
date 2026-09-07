@@ -20,7 +20,7 @@ const statusLabels: Record<SessionSummary['status'], string> = {
 export function SessionsPage({ refreshToken, notify }: { refreshToken: number; notify: (message: string, tone?: ToastTone) => void }) {
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [loading, setLoading] = useState(true)
-  const [transcribing, setTranscribing] = useState<string | null>(null)
+  const [transcribing, setTranscribing] = useState<ReadonlySet<string>>(() => new Set())
   const [expanded, setExpanded] = useState<string | null>(null)
   const [transcripts, setTranscripts] = useState<Record<string, TranscriptDocument>>({})
 
@@ -47,7 +47,8 @@ export function SessionsPage({ refreshToken, notify }: { refreshToken: number; n
   }
 
   async function transcribe(session: SessionSummary) {
-    setTranscribing(session.id)
+    if (transcribing.has(session.id)) return
+    setTranscribing((current) => new Set(current).add(session.id))
     try {
       const document = await window.clarity.transcribeSession(session.id)
       setTranscripts((current) => ({ ...current, [session.id]: document }))
@@ -58,7 +59,11 @@ export function SessionsPage({ refreshToken, notify }: { refreshToken: number; n
       notify(error instanceof Error ? error.message : String(error), 'error')
       await refresh()
     } finally {
-      setTranscribing(null)
+      setTranscribing((current) => {
+        const remaining = new Set(current)
+        remaining.delete(session.id)
+        return remaining
+      })
     }
   }
 
@@ -78,6 +83,7 @@ export function SessionsPage({ refreshToken, notify }: { refreshToken: number; n
           {sessions.map((session) => {
             const transcript = transcripts[session.id]
             const isExpanded = expanded === session.id
+            const isTranscribing = transcribing.has(session.id)
             return (
               <article className={`panel session-card ${isExpanded ? 'expanded' : ''}`} key={session.id}>
                 <div className="session-main">
@@ -88,9 +94,9 @@ export function SessionsPage({ refreshToken, notify }: { refreshToken: number; n
                     {session.hasTranscript ? (
                       <button className="button secondary compact" onClick={() => toggleTranscript(session)}><MessageSquareText size={16} />{isExpanded ? '收起文字稿' : '查看文字稿'}</button>
                     ) : (
-                      <button className="button primary compact" disabled={transcribing === session.id || session.status === 'recording'} onClick={() => transcribe(session)}>
-                        {transcribing === session.id ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-                        {transcribing === session.id ? '转写中…' : '开始转写'}
+                      <button className="button primary compact" disabled={isTranscribing || session.status === 'recording'} onClick={() => transcribe(session)}>
+                        {isTranscribing ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+                        {isTranscribing ? '转写中…' : '开始转写'}
                       </button>
                     )}
                   </div>

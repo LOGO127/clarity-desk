@@ -1,6 +1,6 @@
 {
   "name": "clarity-desk",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A privacy-minded desktop toolkit for Feishu math formatting and interview recording.",
   "main": "./out/main/index.js",
   "author": "Clarity Desk contributors",

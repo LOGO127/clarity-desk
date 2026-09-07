@@ -7,7 +7,7 @@
 <p align="center"><strong>飞书公式一键居中，面试录音随手复盘。</strong></p>
 
 <p align="center">
-  <a href="https://github.com/LOGO127/clarity-desk/releases/tag/v0.3.0"><img alt="Release" src="https://img.shields.io/badge/preview-v0.3.0-6757e5?style=flat-square"></a>
+  <a href="https://github.com/LOGO127/clarity-desk/releases/tag/v0.3.1"><img alt="Release" src="https://img.shields.io/badge/preview-v0.3.1-6757e5?style=flat-square"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-2563eb?style=flat-square">
   <a href="https://github.com/LOGO127/clarity-desk/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/LOGO127/clarity-desk/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-17211c?style=flat-square"></a>
@@ -27,13 +27,13 @@
 
 ## 下载
 
-当前轻量化公开测试版为 [v0.3.0](https://github.com/LOGO127/clarity-desk/releases/tag/v0.3.0)，面向 Windows 10/11 x64，包含本文展示的界面和安全修正。**该版本在 GitHub 标为 Pre-release：飞书合成文档的真实按钮、回读和导出 PDF 已验收，网页视觉与用户实际粘贴样例仍待验收，不承诺所有公式均可居中。** 请使用这里的 v0.3.0 直达链接；GitHub 的 Latest 链接可能仍指向旧版。
+[v0.3.1 公开测试版](https://github.com/LOGO127/clarity-desk/releases/tag/v0.3.1) 面向 Windows 10/11 x64，下载与发布状态以该 Release 为准。本次修复重复触发转写导致额外上传的风险，延续轻量界面，不新增依赖或修改公式流程。**该版本面向 Pre-release 试用：2026-09-05 的飞书合成文档真实按钮、回读和导出 PDF 已验收，网页视觉与用户实际粘贴样例仍待验收，不承诺所有公式均可居中。** 历史版本见 [v0.3.0](https://github.com/LOGO127/clarity-desk/releases/tag/v0.3.0)；GitHub 的 Latest 链接可能仍指向旧版。
 
 | 文件 | 使用方式 |
 | --- | --- |
-| [安装版](https://github.com/LOGO127/clarity-desk/releases/download/v0.3.0/Clarity-Desk-Setup-0.3.0-x64.exe) | 选择目录安装，创建桌面快捷方式 |
-| [便携版](https://github.com/LOGO127/clarity-desk/releases/download/v0.3.0/Clarity-Desk-Portable-0.3.0-x64.exe) | 双击运行，无需安装 |
-| [SHA256SUMS.txt](https://github.com/LOGO127/clarity-desk/releases/download/v0.3.0/SHA256SUMS.txt) | 核对同一 Release 中下载文件的 SHA-256 |
+| [安装版](https://github.com/LOGO127/clarity-desk/releases/download/v0.3.1/Clarity-Desk-Setup-0.3.1-x64.exe) | 选择目录安装，创建桌面快捷方式 |
+| [便携版](https://github.com/LOGO127/clarity-desk/releases/download/v0.3.1/Clarity-Desk-Portable-0.3.1-x64.exe) | 双击运行，无需安装 |
+| [SHA256SUMS.txt](https://github.com/LOGO127/clarity-desk/releases/download/v0.3.1/SHA256SUMS.txt) | 核对同一 Release 中下载文件的 SHA-256 |
 
 当前为公开测试版，尚未代码签名，SmartScreen 可能提示未知发布者。请从本仓库 Releases 下载。便携版首次启动会释放运行库，需要等待数秒。
 
@@ -103,6 +103,8 @@ lark-cli auth login --domain docs
 
 在“设置 → 语音转写”中保存 OpenAI API Key，然后主动点击 **开始转写**。当前使用 `gpt-4o-transcribe-diarize`，会上传混合音轨并可能产生 API 费用。
 
+从 v0.3.1 起，同一录音的转写仍在运行时，重复请求共享这一次任务，不再排队重复上传。不同录音可分别处理，一项完成不会提前解锁另一项；这不是永久缓存，也不保证跨重启去重，失败后仍可主动重试。
+
 每个切片完成后保存断点；中途失败再试，会复用有效的已完成切片。多切片的说话人标签带有“片段 01 / 02”前缀，因为不同切片中的同名标签不保证是同一人。当前不自动命名为“我 / 面试官”。
 
 ## 轻量化
@@ -126,11 +128,13 @@ API Key 使用系统安全存储加密，应用不会以明文保存；飞书凭
 
 发布检查包含单元测试、TypeScript、生产构建、Electron 桌面回归和最终打包程序启动。桌面回归使用合成麦克风、隔离录音目录，验证首屏按需加载、公式预览、声源确认、最小化、录音落盘与外链隔离。
 
+2026-09-07 本地验证通过 **60 项 Vitest 测试 + 4 项 Node 启动测试**，以及 TypeScript/生产构建、源码桌面回归（含合成 A/B 转写任务）、Windows 打包和打包后启动回归。远端 CI 与发布结果以 [Actions](https://github.com/LOGO127/clarity-desk/actions) 为准；详见 [本轮维护记录](docs/MAINTENANCE-20260907.md)。
+
 | 边界 | 当前情况 |
 | --- | --- |
-| 飞书真实修改 | 合成 docx 样例的按钮更新、回读、内容保护和重复点击已通过；PDF 排版通过，网页视觉待登录，旧式公式块不承诺支持 |
+| 飞书真实修改 | 2026-09-05 合成 docx 样例的按钮更新、回读、内容保护和重复点击已通过；PDF 排版通过，网页视觉待登录，旧式公式块不承诺支持；本次 v0.3.1 不新增真实飞书验收 |
 | 系统回环音频 | v0.2 实机验证过；本轮自动回归使用合成麦克风，不代表所有设备组合 |
-| OpenAI 转写 | 断点与响应校验有测试，本轮未调用付费 API |
+| OpenAI 转写 | 断点、响应校验与运行中任务去重使用本地测试；并行按钮状态使用合成任务，不代表真实付费接口验收 |
 | 录音硬件 | 正式面试前应做短录音并试听；蓝牙、声卡、会议软件会影响捕获 |
 | 离线转写、macOS 系统音频 | 尚未支持 |
 

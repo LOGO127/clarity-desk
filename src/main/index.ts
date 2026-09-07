@@ -53,6 +53,7 @@ import { createSessionId, isValidSessionId } from './session-id'
 import { isSafeExternalUrl, isTrustedIpcContext, isTrustedRendererUrl } from './navigation-security'
 import { recoveredRecordingDisposition, recordingIntegrityError } from './recording-integrity'
 import { finalizeAudioChunkFile, recoverUnindexedRecordingChunks } from './recording-files'
+import { createTranscriptionJobRunner } from './transcription-jobs'
 import {
   labelChunkSpeakers,
   parseTranscriptionSegments,
@@ -73,6 +74,7 @@ let isQuitting = false
 let trustedRendererUrl: string | null = null
 
 const sessionLocks = new Map<string, Promise<unknown>>()
+const runTranscriptionJob = createTranscriptionJobRunner<TranscriptDocument>()
 
 const createSessionSchema = z.object({
   title: z.string().trim().min(1).max(120),
@@ -654,85 +656,87 @@ function registerIpcHandlers(): void {
   })
   handleTrusted('session:transcribe', async (_event, sessionId: string): Promise<TranscriptDocument> => {
     assertSessionId(sessionId)
-    const apiKey = await readSecret('openaiApiKey')
-    if (!apiKey) throw new Error('请先在设置中保存 OpenAI API Key。')
+    return runTranscriptionJob(sessionId, async () => {
+      const apiKey = await readSecret('openaiApiKey')
+      if (!apiKey) throw new Error('请先在设置中保存 OpenAI API Key。')
 
-    return withSessionLock(sessionId, async () => {
-      const metadata = await readMetadata(sessionId)
-      const statusBeforeTranscription = metadata.status
-      const checkpointPath = path.join(sessionDirectory(sessionId), 'transcript.partial.json')
-      let completedCount = 0
-      let totalCount = 0
-      metadata.status = 'transcribing'
-      metadata.updatedAt = new Date().toISOString()
-      delete metadata.error
-      await writeMetadata(metadata)
-      try {
-        const mixedChunks = metadata.chunks
-          .filter((chunk) => chunk.track === 'mixed')
-          .sort((left, right) => left.startedAtMs - right.startedAtMs)
-        if (mixedChunks.length === 0) throw new Error('该会话没有可转写的混合音轨。')
-        totalCount = mixedChunks.length
-
-        let checkpoint: TranscriptCheckpoint | null = null
-        try {
-          checkpoint = JSON.parse(await fs.readFile(checkpointPath, 'utf8')) as TranscriptCheckpoint
-        } catch {
-          checkpoint = null
-        }
-        const completedChunks = await resumeTranscriptionChunks(
-          sessionId,
-          mixedChunks,
-          checkpoint,
-          (chunk) => transcribeAudioFile(
-            path.join(sessionDirectory(sessionId), chunk.fileName),
-            apiKey,
-            chunk.startedAtMs / 1000
-          ),
-          async (completed) => {
-            completedCount = completed.length
-            await writeJsonAtomic(checkpointPath, {
-              schemaVersion: 1,
-              sessionId,
-              updatedAt: new Date().toISOString(),
-              chunks: completed
-            } satisfies TranscriptCheckpoint)
-          }
-        )
-        const segments = completedChunks.flatMap((entry, index) =>
-          labelChunkSpeakers(entry.segments, index, completedChunks.length)
-        )
-        segments.sort((left, right) => left.start - right.start)
-        const document: TranscriptDocument = {
-          sessionId,
-          title: metadata.title,
-          generatedAt: new Date().toISOString(),
-          model: 'gpt-4o-transcribe-diarize',
-          segments,
-          text: segments.map((segment) => `${segment.speaker}: ${segment.text}`).join('\n')
-        }
-        await writeJsonAtomic(path.join(sessionDirectory(sessionId), 'transcript.json'), document)
-        await writeTextAtomic(path.join(sessionDirectory(sessionId), 'transcript.md'), transcriptToMarkdown(document))
-        metadata.status = 'transcribed'
+      return withSessionLock(sessionId, async () => {
+        const metadata = await readMetadata(sessionId)
+        const statusBeforeTranscription = metadata.status
+        const checkpointPath = path.join(sessionDirectory(sessionId), 'transcript.partial.json')
+        let completedCount = 0
+        let totalCount = 0
+        metadata.status = 'transcribing'
         metadata.updatedAt = new Date().toISOString()
         delete metadata.error
         await writeMetadata(metadata)
-        await fs.rm(checkpointPath, { force: true })
-        return document
-      } catch (error) {
-        metadata.status = statusBeforeTranscription === 'transcribed'
-          ? 'transcribed'
-          : statusBeforeTranscription === 'failed'
-            ? 'failed'
-            : 'ready'
-        const detail = error instanceof Error ? error.message : String(error)
-        metadata.error = completedCount > 0
-          ? `转写未完成，已保留 ${completedCount}/${totalCount} 个音频切片的进度；重试将从断点继续。${detail}`
-          : `转写未完成：${detail}`
-        metadata.updatedAt = new Date().toISOString()
-        await writeMetadata(metadata)
-        throw error
-      }
+        try {
+          const mixedChunks = metadata.chunks
+            .filter((chunk) => chunk.track === 'mixed')
+            .sort((left, right) => left.startedAtMs - right.startedAtMs)
+          if (mixedChunks.length === 0) throw new Error('该会话没有可转写的混合音轨。')
+          totalCount = mixedChunks.length
+
+          let checkpoint: TranscriptCheckpoint | null = null
+          try {
+            checkpoint = JSON.parse(await fs.readFile(checkpointPath, 'utf8')) as TranscriptCheckpoint
+          } catch {
+            checkpoint = null
+          }
+          const completedChunks = await resumeTranscriptionChunks(
+            sessionId,
+            mixedChunks,
+            checkpoint,
+            (chunk) => transcribeAudioFile(
+              path.join(sessionDirectory(sessionId), chunk.fileName),
+              apiKey,
+              chunk.startedAtMs / 1000
+            ),
+            async (completed) => {
+              completedCount = completed.length
+              await writeJsonAtomic(checkpointPath, {
+                schemaVersion: 1,
+                sessionId,
+                updatedAt: new Date().toISOString(),
+                chunks: completed
+              } satisfies TranscriptCheckpoint)
+            }
+          )
+          const segments = completedChunks.flatMap((entry, index) =>
+            labelChunkSpeakers(entry.segments, index, completedChunks.length)
+          )
+          segments.sort((left, right) => left.start - right.start)
+          const document: TranscriptDocument = {
+            sessionId,
+            title: metadata.title,
+            generatedAt: new Date().toISOString(),
+            model: 'gpt-4o-transcribe-diarize',
+            segments,
+            text: segments.map((segment) => `${segment.speaker}: ${segment.text}`).join('\n')
+          }
+          await writeJsonAtomic(path.join(sessionDirectory(sessionId), 'transcript.json'), document)
+          await writeTextAtomic(path.join(sessionDirectory(sessionId), 'transcript.md'), transcriptToMarkdown(document))
+          metadata.status = 'transcribed'
+          metadata.updatedAt = new Date().toISOString()
+          delete metadata.error
+          await writeMetadata(metadata)
+          await fs.rm(checkpointPath, { force: true })
+          return document
+        } catch (error) {
+          metadata.status = statusBeforeTranscription === 'transcribed'
+            ? 'transcribed'
+            : statusBeforeTranscription === 'failed'
+              ? 'failed'
+              : 'ready'
+          const detail = error instanceof Error ? error.message : String(error)
+          metadata.error = completedCount > 0
+            ? `转写未完成，已保留 ${completedCount}/${totalCount} 个音频切片的进度；重试将从断点继续。${detail}`
+            : `转写未完成：${detail}`
+          metadata.updatedAt = new Date().toISOString()
+          await writeMetadata(metadata)
+          throw error
+        }
+      })
     })
   })
   handleTrusted('session:open-folder', async (_event, sessionId: string) => {
