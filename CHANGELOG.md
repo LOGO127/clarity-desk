@@ -2,12 +2,25 @@
 
 All notable changes to Clarity Desk will be documented here.
 
-## [Unreleased]
+## [0.3.1] - 2026-09-07 (Pre-release)
+
+Windows x64 public-preview patch. This patch does not add dependencies or change Feishu formula behavior. Download availability is determined by the tagged GitHub Release; local checks below do not imply remote CI or publication success.
 
 ### Fixed
 
+- Share one in-flight transcription job for duplicate requests targeting the same session, registering before credential reads and retaining the session disk lock. Avoid queuing a second upload after the first task has finished.
+- Track active transcription sessions independently in the UI, so completing session B does not unlock session A while A is still running.
+- Clear shared jobs after success, rejection, or synchronous failure to allow explicit retries; this is not a permanent result cache or cross-restart deduplication.
 - Make source and packaged desktop smoke wait for the exact built renderer URL and its visible main heading before reading app information. Do not accept the initial blank page's load event as application readiness.
-- Test delayed navigation/heading ordering, strict file URL matching and timeout propagation with four dependency-free startup-helper tests. Keep recording isolation and all existing smoke assertions unchanged.
+
+### Verification
+
+- Add local job-runner tests for immediate duplicates, pending credential reads, independent sessions, and cleanup/retry after completion or failure.
+- Add a synthetic two-session desktop UI check: start A and B, finish B first, and verify A remains disabled until its own completion. The paid transcription handler is replaced before any test click.
+- Include four dependency-free startup-helper tests for delayed navigation/heading ordering, strict file URL matching and timeout propagation. Keep recording isolation and existing smoke assertions.
+- Local validation on 2026-09-07 passed 60 Vitest tests and 4 Node startup tests, TypeScript/production build, source Electron smoke including the synthetic A/B check, Windows packaging, and packaged smoke ending with `PACKAGED_SMOKE_OK`.
+- The release workflow rebuilds and checks the packaged application. Remote CI and publication status remain available in GitHub Actions; see `docs/MAINTENANCE-20260907.md` for this maintenance run.
+- No new paid transcription, real Feishu writes, or real dual-source hardware tests are part of this patch. Feishu browser visuals and user-pasted examples remain unverified; historical v0.3.0 evidence below is unchanged.
 
 ## [0.3.0] - 2026-09-05 (Pre-release)
 

@@ -1,6 +1,6 @@
 # 架构
 
-本文描述 v0.3.0 公开测试版代码；发布状态与安装包见 [Release](https://github.com/LOGO127/clarity-desk/releases/tag/v0.3.0)。Clarity Desk 是面向 Windows 的 Electron 桌面工具，核心流程为已有飞书文档的公式居中，以及本地录音与主动转写。
+本文描述 v0.3.1 代码；发布状态与安装包见 [README](../README.md#下载)。Clarity Desk 是面向 Windows 的 Electron 桌面工具，核心流程为已有飞书文档的公式居中，以及本地录音与主动转写。
 
 ## 进程与模块边界
 
@@ -64,6 +64,8 @@ Renderer 由 Vite 打包并使用 esbuild 压缩。React、Markdown、KaTeX 等�
 ## 主动转写与断点
 
 主进程只在用户点击转写后，将混合音轨分段提交给 OpenAI `gpt-4o-transcribe-diarize`；可能产生 API 费用，不包含离线模型。API Key 通过 Electron `safeStorage` 加密保存；安全存储不可用时拒绝明文保存，已保存密钥不回传 Renderer。
+
+`transcription-jobs.ts` 在读取密钥或等待会话磁盘锁之前，按会话 ID 登记运行中的 Promise。同一主进程内的重复请求共享该任务及结果，不再排队执行第二次上传；不同会话互不合并，已有磁盘锁仍保护会话文件。成功、拒绝和同步异常都会清理登记，允许之后主动重试；这只去重运行中的任务，不是永久结果缓存，也不跨应用重启。`SessionsPage` 用会话 ID 集合维护各自的按钮忙碌状态，一项完成只解除自身状态。
 
 每段响应需有非空文字及合法时间范围，时间戳按该录音段的起点偏移。每完成一段，原子写入 `transcript.partial.json`。重试仅复用版本、会话 ID、文件名、文件大小和片段结构校验通过的缓存，并保留所有有效缓存，包括失败位置之后已完成的段。
 

@@ -72,6 +72,48 @@ async function checkExternalNavigation(application, page) {
   assert.deepEqual(await application.evaluate(() => globalThis.smokeExternalUrls), ['https://example.com/clarity-smoke'])
 }
 
+async function checkConcurrentTranscriptionUi(application, page) {
+  // UI-only synthetic jobs. Replace the paid handler before any transcribe click.
+  await application.evaluate(({ ipcMain }) => {
+    const now = new Date().toISOString()
+    const sessions = ['A', 'B'].map((id) => ({
+      id, title: `合成转写 ${id}`, schemaVersion: 1, createdAt: now, updatedAt: now,
+      consentConfirmedAt: now, status: 'ready', durationMs: 1_000,
+      hasSystemAudio: false, chunks: [], directory: '', hasTranscript: false
+    }))
+    globalThis.smokeTranscriptionCalls = []
+    globalThis.smokeTranscriptionCompletions = new Map()
+    ipcMain.removeHandler('session:list')
+    ipcMain.handle('session:list', () => sessions)
+    ipcMain.removeHandler('session:transcribe')
+    ipcMain.handle('session:transcribe', (_event, id) => {
+      globalThis.smokeTranscriptionCalls.push(id)
+      return new Promise((resolve) => globalThis.smokeTranscriptionCompletions.set(id, () => {
+        const session = sessions.find((entry) => entry.id === id)
+        session.status = 'transcribed'
+        session.hasTranscript = true
+        resolve({ sessionId: id, title: session.title, generatedAt: now, model: 'synthetic-test',
+          segments: [{ speaker: '合成说话人', start: 0, end: 1, text: '仅用于本地测试。' }], text: '仅用于本地测试。' })
+      }))
+    })
+  })
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  const cardA = page.locator('.session-card').filter({ has: page.getByRole('heading', { name: '合成转写 A', exact: true }) })
+  const cardB = page.locator('.session-card').filter({ has: page.getByRole('heading', { name: '合成转写 B', exact: true }) })
+  await cardA.getByRole('button', { name: '开始转写', exact: true }).click()
+  await cardB.getByRole('button', { name: '开始转写', exact: true }).click()
+  assert.equal(await cardA.getByRole('button', { name: '转写中…', exact: true }).isDisabled(), true)
+  assert.equal(await cardB.getByRole('button', { name: '转写中…', exact: true }).isDisabled(), true)
+  assert.deepEqual(await application.evaluate(() => globalThis.smokeTranscriptionCalls), ['A', 'B'])
+  await application.evaluate(() => globalThis.smokeTranscriptionCompletions.get('B')())
+  await cardB.getByText('已完成', { exact: true }).waitFor()
+  assert.equal(await cardA.getByRole('button', { name: '转写中…', exact: true }).isDisabled(), true,
+    'Completing B must not unlock A while A is still running')
+  await application.evaluate(() => globalThis.smokeTranscriptionCompletions.get('A')())
+  await cardA.getByText('已完成', { exact: true }).waitFor()
+  assert.deepEqual(await application.evaluate(() => globalThis.smokeTranscriptionCalls), ['A', 'B'])
+}
+
 async function main() {
   const root = path.resolve(__dirname, '..')
   const artifactRoot = path.join(root, 'output', 'playwright')
@@ -183,6 +225,7 @@ async function main() {
     assert.equal(metadata.status, 'ready')
     assert.deepEqual(metadata.chunks.map((chunk) => chunk.track).sort(), ['microphone', 'mixed'])
     assert.ok(metadata.chunks.every((chunk) => chunk.size > 0))
+    await checkConcurrentTranscriptionUi(application, page)
     await checkExternalNavigation(application, page)
 
     if (messages.length > 0) throw new Error(`renderer diagnostics:\n${messages.join('\n')}`)

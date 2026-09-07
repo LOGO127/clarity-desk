@@ -57,8 +57,8 @@ jobs:
           } else {
             $releaseArgs += '--generate-notes'
           }
-          if ($env:GITHUB_REF_NAME -eq 'v0.3.0') {
-            $releaseArgs += @('--prerelease', '--latest=false', '--title', 'v0.3.0 · 轻量化公开测试版')
+          if ($env:GITHUB_REF_NAME -in @('v0.3.0', 'v0.3.1')) {
+            $releaseArgs += @('--prerelease', '--latest=false', '--title', "$env:GITHUB_REF_NAME · 轻量化公开测试版")
           }
           & gh @releaseArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
